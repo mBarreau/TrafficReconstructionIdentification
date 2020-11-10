@@ -165,7 +165,7 @@ class NeuralNetwork():
         self.optimizer.append(OptimizationProcedure(self, self.MSEg, 100, {'maxiter': 500,
                                                                           'maxfun': 5000,
                                                                           'maxcor': 50,
-                                                                          'maxls': 50,
+                                                                          'maxls': 20,
                                                                           'ftol': 5.0 * np.finfo(float).eps},
                                                     var_list=list_var_density))
         self.optimizer.append(OptimizationProcedure(self, self.loss, 1000, {'maxiter': 4000,

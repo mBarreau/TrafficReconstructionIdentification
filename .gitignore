@@ -1,3 +1,5 @@
 
 *.pyc
 density.eps
+error.eps
+reconstruction.eps
