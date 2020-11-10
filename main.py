@@ -25,8 +25,6 @@ rhoBar = 0.2 # Average density of cars on the road
 rhoMax = 120 # Number of vehicles per kilometer
 rhoSigma = 0.6 # initial condition standard deviation
 noise = False # noise on the measurements and on the trajectories
-V = lambda rho: Vf*(1-rho) # Equilibrium velocity function
-F = lambda rho: Vf*(1-2*rho) # Flux function of the PDE
 
 
 def get_probe_vehicle_data(L=-1, Tmax=-1, selectedPacket=-1, totalPacket=-1, noise=False):
@@ -135,8 +133,7 @@ axisPlot = simu_godunov.getAxisPlot()
 x_train, t_train, rho_train, v_train = get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=noise)
 
 trained_neural_network = rn.ReconstructionNeuralNetwork(x_train, t_train, rho_train, v_train,
-                                                    Ltotal, Tmax, V, F, 
-                                                    N_f=7500, N_g=150)
+                                                    Ltotal, Tmax, N_f=7500, N_g=150)
 
 [_, figError] = trained_neural_network.plot(axisPlot, rho)
 simu_godunov.pv.plot(axisPlot[1])

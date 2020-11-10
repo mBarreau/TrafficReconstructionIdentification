@@ -63,6 +63,7 @@ class NeuralNetwork():
         self.x = x 
         self.t = t
         self.u = u 
+        self.v = v
 
         self.x_f = X_f[:, 0:1]
         self.t_f = X_f[:, 1:2]
@@ -73,9 +74,9 @@ class NeuralNetwork():
         self.gamma_var = tf.Variable(tf.random.truncated_normal([1,1], mean=0, 
                                                          stddev=0.01, dtype=tf.float32), 
                                      dtype=tf.float32, trainable=True)
-        self.noise_rho_bar = tf.Variable(tf.random.truncated_normal([1,1], mean=0, 
+        self.noise_rho_bar = [tf.Variable(tf.random.truncated_normal([1,1], mean=0, 
                                                          stddev=0.01, dtype=tf.float32), 
-                                     dtype=tf.float32, trainable=True)
+                                     dtype=tf.float32, trainable=True)  for _ in range(self.N)]
 
         # Initilization of the neural networks
         
@@ -83,7 +84,7 @@ class NeuralNetwork():
         self.weights_density, self.biases_density = self.initialize_neural_network(layers_density, init_density[0], init_density[1], act="tanh")
         list_var_density = self.weights_density + self.biases_density
         list_var_density.append(self.gamma_var)
-        list_var_density.append(self.noise_rho_bar)
+        list_var_density = list_var_density + self.noise_rho_bar
         
         # Phi neural network
         self.weights_trajectories = []
@@ -449,6 +450,9 @@ class NeuralNetwork():
             tf_dict[k] = v
             
         for k, v in zip(self.u_tf, self.u):
+            tf_dict[k] = v
+            
+        for k, v in zip(self.v_tf, self.v):
             tf_dict[k] = v
             
         for k, v in zip(self.t_g_tf, self.t_g):

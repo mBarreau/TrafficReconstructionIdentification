@@ -21,7 +21,7 @@ def hms(seconds):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, x, t, rho, v, L, Tmax, V, F, N_f=1000, N_g=100):
+    def __init__(self, x, t, rho, v, L, Tmax, N_f=1000, N_g=100):
         '''
         Initialize a neural network for density reconstruction
 
@@ -39,10 +39,6 @@ class ReconstructionNeuralNetwork():
             Length of the spacial domain.
         Tmax : float64
             Length of the temporal domain.
-        V : lambda function
-            Velocity of the agents function.
-        F : lambda function
-            Flux of the PDE (velocity of the characteristics).
         N_f : integer, optional
             Number of physical points for F. The default is 1000.
         N_g : integer, optional
