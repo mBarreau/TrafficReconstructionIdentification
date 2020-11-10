@@ -112,7 +112,7 @@ class NeuralNetwork():
             self.weight_relu.append(tf.Variable(0, dtype=tf.float32, trainable=False))
             
         # V neural network
-        self.weights_speed, self.biases_speed = self.initialize_neural_network(layers_speed, init_speed[0], init_speed[1], act="relu")
+        self.weights_speed, self.biases_speed = self.initialize_neural_network(layers_speed, init_speed[0], init_speed[1], act="tanh")
         
         # Start a TF session
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True,
@@ -299,7 +299,7 @@ class NeuralNetwork():
     
     def net_v(self, u):
         return self.neural_network(u, self.weights_speed, 
-                                self.biases_speed, act=tf.nn.relu)*(1-u)
+                                self.biases_speed, act=tf.nn.tanh)*(1-u)
     
     def net_F(self, u):
         v = self.net_v(u)
