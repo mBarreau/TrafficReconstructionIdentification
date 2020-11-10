@@ -161,6 +161,46 @@ class ReconstructionNeuralNetwork():
         
         return self.neural_network.predict(x, t)/2+0.5
     
+    def predict_speed(self, rho):
+        '''
+        Return the estimated speed at rho
+
+        Parameters
+        ----------
+        rho : numpy array (?, )
+            density.
+
+        Returns
+        -------
+        numpy array
+            estimated speed.
+
+        '''
+        
+        u = 2*rho-1
+        
+        return self.neural_network.predict_speed(u)*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
+    
+    def predict_F(self, rho):
+        '''
+        Return the estimated characteristic speed at rho
+
+        Parameters
+        ----------
+        rho : numpy array (?, )
+            density.
+
+        Returns
+        -------
+        numpy array
+            estimated characteristic speed.
+
+        '''
+        
+        u = 2*rho-1
+        
+        return self.neural_network.predict_F(u)*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
+    
     def predict_trajectories(self, t):
         '''
         Return the estimated agents' locations at t
@@ -180,7 +220,6 @@ class ReconstructionNeuralNetwork():
         t = [2*(t[i] - self.lb[1])/(self.ub[1] - self.lb[1])-1 for i in range(self.Nxi)]
         
         output = self.neural_network.predict_trajectories(t)
-        print(len(output))
         output = [(output[i]+1)*(self.ub[0] - self.lb[0])/2 + self.lb[0] for i in range(self.Nxi)]
         return output
     
@@ -198,8 +237,8 @@ class ReconstructionNeuralNetwork():
 
         Returns
         -------
-        list of two Figures
-            return the reconstruction and error figures.
+        list of three Figures
+            return the speed, reconstruction and error figures.
 
         '''
         
@@ -221,6 +260,21 @@ class ReconstructionNeuralNetwork():
         rho_prediction = self.predict(xstar, tstar).reshape(Nx, Nt)
         t_pred = [t.reshape(t.shape[0], 1)]*self.Nxi
         X_prediction = self.predict_trajectories(t_pred)
+        rho_speed = np.linspace(0, 1).reshape(-1,1)
+        v_prediction = self.predict_speed(rho_speed).reshape(-1,1)
+        F_prediction = self.predict_F(rho_speed).reshape(-1,1)
+        
+        figSpeed = plt.figure(figsize=(7.5, 5))
+        plt.plot(rho_speed, v_prediction, rasterized=True)
+        plt.plot(rho_speed, F_prediction, rasterized=True)
+        plt.xlabel(r'Normalized Density')
+        plt.ylabel(r'Speed [km/h]')
+        plt.xlim(0, 1)
+        plt.grid()
+        plt.tight_layout()
+        # plt.title('Reconstruction')
+        plt.show()
+        figSpeed.savefig('speed.eps', bbox_inches='tight')
 
         figReconstruction = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(t, x)
@@ -253,4 +307,4 @@ class ReconstructionNeuralNetwork():
         plt.show()
         figError.savefig('error.eps', bbox_inches='tight') 
         
-        return [figReconstruction, figError]
+        return [figSpeed, figReconstruction, figError]

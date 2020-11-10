@@ -26,21 +26,12 @@ rhoMax = 120 # Number of vehicles per kilometer
 rhoSigma = 0.6 # initial condition standard deviation
 noise = False # noise on the measurements and on the trajectories
 
-
-def get_probe_vehicle_data(L=-1, Tmax=-1, selectedPacket=-1, totalPacket=-1, noise=False):
+def get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=False):
     '''
     Collect data from N probe vehicles
 
     Parameters
     ----------
-    L : float64, optional
-        Space-length of the domain. Used only if L and Tmax are strictly 
-        positive. 
-        The default is -1.
-    Tmax : float64, optional
-        Time-length of the domain. Used only if L and Tmax are strictly 
-        positive. 
-        The default is -1.
     selectedPacket : float64, optional
         Number of measurements per packet selected. If -1 then all 
         the measurements are used. 
@@ -63,6 +54,8 @@ def get_probe_vehicle_data(L=-1, Tmax=-1, selectedPacket=-1, totalPacket=-1, noi
         time coordinate of the measurements.
     rho_selected : list of N numpy array of shape (?,1)
         density measurements.
+    v_selected : list of N numpy array of shape (?,1)
+        velocity measurements.
 
     '''
     x_true, t, rho_true, v_true = simu_godunov.getMeasurements()
@@ -135,7 +128,7 @@ x_train, t_train, rho_train, v_train = get_probe_vehicle_data(selectedPacket=-1,
 trained_neural_network = rn.ReconstructionNeuralNetwork(x_train, t_train, rho_train, v_train,
                                                     Ltotal, Tmax, N_f=7500, N_g=150)
 
-[_, figError] = trained_neural_network.plot(axisPlot, rho)
+[_, _, figError] = trained_neural_network.plot(axisPlot, rho)
 simu_godunov.pv.plot(axisPlot[1])
 plt.show()
 figError.savefig('error.eps', bbox_inches='tight')

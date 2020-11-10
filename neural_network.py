@@ -109,10 +109,10 @@ class NeuralNetwork():
             self.biases_trajectories_relu.append(biases_trajectories_relu)
             
             self.weight_tanh.append(tf.Variable(init_trajectories[-2], dtype=tf.float32, trainable=True))
-            self.weight_relu.append(tf.Variable(init_trajectories[-1], dtype=tf.float32, trainable=True))
+            self.weight_relu.append(tf.Variable(0, dtype=tf.float32, trainable=False))
             
         # V neural network
-        self.weights_speed, self.biases_speed = self.initialize_neural_network(layers_speed, init_speed[0], init_speed[1], act="tanh")
+        self.weights_speed, self.biases_speed = self.initialize_neural_network(layers_speed, init_speed[0], init_speed[1], act="relu")
         
         # Start a TF session
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True,
@@ -157,17 +157,17 @@ class NeuralNetwork():
         
         # Definition of the training procedure
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss_trajectories, 100, {'maxiter': 500,
+        self.optimizer.append(OptimizationProcedure(self, self.loss_trajectories, 100, {'maxiter': 1000,
                                                                           'maxfun': 5000,
                                                                           'maxcor': 50,
                                                                           'maxls': 50,
                                                                           'ftol': 5.0 * np.finfo(float).eps}))
-        self.optimizer.append(OptimizationProcedure(self, self.MSEg, 100, {'maxiter': 500,
-                                                                          'maxfun': 5000,
-                                                                          'maxcor': 50,
-                                                                          'maxls': 20,
-                                                                          'ftol': 5.0 * np.finfo(float).eps},
-                                                    var_list=list_var_density))
+        # self.optimizer.append(OptimizationProcedure(self, self.MSEg, 100, {'maxiter': 1000,
+        #                                                                   'maxfun': 5000,
+        #                                                                   'maxcor': 50,
+        #                                                                   'maxls': 20,
+        #                                                                   'ftol': 5.0 * np.finfo(float).eps},
+        #                                             var_list=list_var_density))
         self.optimizer.append(OptimizationProcedure(self, self.loss, 1000, {'maxiter': 4000,
                                                                           'maxfun': 5000,
                                                                           'maxcor': 50,
@@ -299,12 +299,13 @@ class NeuralNetwork():
     
     def net_v(self, u):
         return self.neural_network(u, self.weights_speed, 
-                                self.biases_speed, act=tf.nn.tanh)
+                                self.biases_speed, act=tf.nn.relu)*(1-u)
     
     def net_F(self, u):
         v = self.net_v(u)
-        v_rho = tf.gradients(v, u)[0]
-        return v + u*v_rho
+        v_u = tf.gradients(v, u)[0]
+        return v + (u+1)*v_u 
+        # return - 0.3684 * u
 
     def net_u(self, x, t):
         '''
@@ -486,6 +487,43 @@ class NeuralNetwork():
         x = np.float32(x)
         t = np.float32(t)
         return np.minimum(np.maximum(self.sess.run(self.net_u(x,t)), -1), 1)
+    
+    def predict_speed(self, u):
+        '''
+        Return the standardized estimated speed at u
+
+        Parameters
+        ----------
+        u : numpy array (?, )
+            standardized density.
+
+        Returns
+        -------
+        numpy array
+            standardized estimated speed.
+
+        '''
+        u = np.float32(u)
+        return self.sess.run(self.net_v(u))
+    
+    def predict_F(self, u):
+        '''
+        Return the standardized estimated characteristic speed at u
+
+        Parameters
+        ----------
+        u : numpy array (?, )
+            standardized density.
+
+        Returns
+        -------
+        numpy array
+            standardized estimated characteristic speed.
+
+        '''
+        u = np.float32(u)
+        u_tf = tf.placeholder(tf.float32, shape=[None, 1])
+        return self.sess.run(self.net_F(u_tf), feed_dict={u_tf: u})
     
     def predict_trajectories(self, t):
         '''
