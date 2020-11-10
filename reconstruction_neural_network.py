@@ -184,6 +184,7 @@ class ReconstructionNeuralNetwork():
         t = [2*(t[i] - self.lb[1])/(self.ub[1] - self.lb[1])-1 for i in range(self.Nxi)]
         
         output = self.neural_network.predict_trajectories(t)
+        print(len(output))
         output = [(output[i]+1)*(self.ub[0] - self.lb[0])/2 + self.lb[0] for i in range(self.Nxi)]
         return output
     

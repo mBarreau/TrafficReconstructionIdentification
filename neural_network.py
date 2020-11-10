@@ -68,8 +68,7 @@ class NeuralNetwork():
         self.t_f = X_f[:, 1:2]
         self.t_g = t_g
         
-        self.N = layers_trajectories[-1] # Number of agents
-        self.N_v = 50 # Number of training points for the speed
+        self.N = len(self.x) # Number of agents
 
         self.gamma_var = tf.Variable(tf.random.truncated_normal([1,1], mean=0, 
                                                          stddev=0.01, dtype=tf.float32), 
@@ -487,19 +486,21 @@ class NeuralNetwork():
     def predict_trajectories(self, t):
         '''
         Return the standardized estimated agents' locations at t
-
         Parameters
         ----------
-        t : numpy array (?, )
+        t : N numpy arrays of size (?,)
             standardized time coordinate.
-
         Returns
         -------
-        numpy array
+        lif of N numpy arrays
             standardized estimated agents location.
-
         '''
-        return self.sess.run(self.x_pred, {self.t_tf: t})
+        tf_dict = {}
+        i = 0
+        for k, v in zip(self.t_tf, t):
+            tf_dict[k] = v
+            i = i+1
+        return self.sess.run(self.x_pred, tf_dict)
     
 class OptimizationProcedure():
     
