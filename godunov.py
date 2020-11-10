@@ -60,14 +60,16 @@ class ProbeVehicles:
         xMeasurements = [np.empty((0, self.Nxi))]*self.Nxi
         tMeasurements = [np.empty((0, self.Nxi))]*self.Nxi
         zMeasurements = [np.empty((0, self.Nxi))]*self.Nxi
+        vMeasurements = [np.empty((0, self.Nxi))]*self.Nxi
         for n in range(self.sim.Nt):
             for j in range(self.Nxi):
                 if np.isnan(self.xiArray[j, n]) == False:
                     tMeasurements[j] = np.append(tMeasurements[j], n*self.sim.deltaT)
                     xMeasurements[j] = np.append(xMeasurements[j], self.xiArray[j,n])
                     zMeasurements[j] = np.append(zMeasurements[j], z[self.xi[j,n],n])
+                    vMeasurements[j] = np.append(vMeasurements[j], self.speed(z[self.xi[j,n],n]))
                     
-        return (xMeasurements, tMeasurements, zMeasurements)
+        return (xMeasurements, tMeasurements, zMeasurements, vMeasurements)
     
     def plot(self, t):
         it = np.round(np.arange(0, self.sim.Nt, self.sim.Nt/len(t))).astype(int)

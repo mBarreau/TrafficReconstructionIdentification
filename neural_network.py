@@ -62,14 +62,14 @@ class NeuralNetwork():
 
         self.x = x 
         self.t = t
-        self.u = u.reshape((-1,1)) 
+        self.u = u 
 
         self.x_f = X_f[:, 0:1]
         self.t_f = X_f[:, 1:2]
         self.t_g = t_g
         
         self.N = layers_trajectories[-1] # Number of agents
-        self.Nv = 50 # Number of training points for the speed
+        self.N_v = 50 # Number of training points for the speed
 
         self.gamma_var = tf.Variable(tf.random.truncated_normal([1,1], mean=0, 
                                                          stddev=0.01, dtype=tf.float32), 
@@ -118,49 +118,62 @@ class NeuralNetwork():
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True,
                                                      log_device_placement=True))
 
-        # PDE part
-        self.x_tf = tf.placeholder(tf.float32, shape=[None, self.x.shape[1]])
-        self.t_tf = tf.placeholder(tf.float32, shape=[None, self.t.shape[1]])
-        self.u_tf = tf.placeholder(tf.float32, shape=[None, self.u.shape[1]])
-        self.u_v_tf = tf.placeholder(tf.float32, shape=[None, self.N_v])
+        # PDE part       
+        self.x_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
+        self.t_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
+        self.u_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
+        self.v_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
         self.x_f_tf = tf.placeholder(tf.float32, shape=[None, self.x_f.shape[1]])
         self.t_f_tf = tf.placeholder(tf.float32, shape=[None, self.t_f.shape[1]])
         
-        self.u_pred = self.net_u(tf.reshape(self.net_x(self.t_tf), (-1,1)), 
-                                  tf.reshape(tf.tile(self.t_tf, [1, self.N]), (-1,1)))
+        self.u_pred = [self.net_u(self.net_x_pv(self.t_tf[i], i), self.t_tf[i]) for i in range(self.N)] 
         self.f_pred = self.net_f(self.x_f_tf, self.t_f_tf)        
         
         # Agents part
-        self.t_g_tf = tf.placeholder(tf.float32, shape=[None, self.t_g.shape[1]])
+        self.t_g_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
         
         self.x_pred = self.net_x(self.t_tf)
         self.g_pred = self.net_g(self.t_g_tf)
 
         # MSE part
-        self.MSEu = tf.reduce_mean(tf.square(self.u_tf - self.u_pred - self.noise_rho_bar))
+        self.MSEu = 0
+        for i in range(self.N):
+            self.MSEu = self.MSEu + tf.reduce_mean(tf.square(self.u_tf[i] - self.u_pred[i] - self.noise_rho_bar[i]))/self.N
         self.MSEf = tf.reduce_mean(tf.square(self.f_pred))
         
-        self.MSEtrajectories = tf.reduce_sum(tf.square(self.x_tf - self.x_pred))/self.N
-        self.MSEg = tf.reduce_mean(tf.square(self.g_pred))
+        self.MSEtrajectories = 0
+        self.MSEg = 0
+        for i in range(self.N):
+            self.MSEtrajectories = self.MSEtrajectories + tf.reduce_mean(tf.square(self.x_tf[i] - self.x_pred[i]))/self.N
+            self.MSEg = self.MSEg + tf.reduce_mean(tf.square(self.g_pred[i]))/self.N
+            
+        self.MSEv = 0
+        for i in range(self.N):
+            self.MSEv = self.MSEv + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.u_tf[i])))/self.N
         
-        self.MSEv = tf.reduce_mean(tf.square(self.u_v_tf - self.net_v(self.u_v_tf)))
-        
-        self.loss_trajectories = self.MSEtrajectories + 0.5*self.MSEg
-        self.loss = self.MSEu + 0.1*self.MSEf + 0.5*self.loss_trajectories
-        self.loss_precise = self.MSEu + self.MSEf + self.loss_trajectories + 0.1*tf.square(self.gamma_var)
+        self.loss_trajectories = self.MSEtrajectories + 0*self.MSEg + self.MSEv
+        self.loss = self.MSEu + 0.1*self.MSEf + 0.5*self.MSEtrajectories + 0.1*self.MSEg + self.MSEv
+        self.loss_precise = self.MSEu + self.MSEf + self.MSEtrajectories + 0.5*self.MSEg + self.MSEv + 0.1*tf.square(self.gamma_var)
         
         # Definition of the training procedure
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss_trajectories, 0, {'maxiter': 500,
+        self.optimizer.append(OptimizationProcedure(self, self.loss_trajectories, 100, {'maxiter': 500,
                                                                           'maxfun': 5000,
                                                                           'maxcor': 50,
                                                                           'maxls': 50,
                                                                           'ftol': 5.0 * np.finfo(float).eps}))
+        self.optimizer.append(OptimizationProcedure(self, self.MSEg, 100, {'maxiter': 500,
+                                                                          'maxfun': 5000,
+                                                                          'maxcor': 50,
+                                                                          'maxls': 50,
+                                                                          'ftol': 5.0 * np.finfo(float).eps},
+                                                    var_list=list_var_density))
         self.optimizer.append(OptimizationProcedure(self, self.loss, 1000, {'maxiter': 4000,
                                                                           'maxfun': 5000,
                                                                           'maxcor': 50,
                                                                           'maxls': 20,
-                                                                          'ftol': 5.0 * np.finfo(float).eps}, var_list=list_var_density))
+                                                                          'ftol': 5.0 * np.finfo(float).eps}, 
+                                                    var_list=list_var_density))
         self.optimizer.append(OptimizationProcedure(self, self.loss_precise, 0, {'maxiter': 10000,
                                                                           'maxfun': 50000,
                                                                           'maxcor': 150,
@@ -340,13 +353,43 @@ class NeuralNetwork():
         f = u_t + self.net_F(u) * u_x - self.gamma_var**2 * u_xx
         return f
     
-    def net_x(self, t):
-        x_tanh = self.neural_network(t, self.weights_trajectories, 
-                                    self.biases_trajectories, act=tf.nn.tanh)
-        x_relu = self.neural_network(t, self.weights_trajectories_relu, 
-                                                 self.biases_trajectories_relu,
+    def net_x_pv(self, t, i=0):
+        '''
+        return the standardized position of the agent i
+        Parameters
+        ----------
+        t : tensor (NOT A LIST)
+            standardized time.
+        i : int, optional
+            Number of the agent. The default is 0.
+        Returns
+        -------
+        tensor
+            standardized position of the agent i.
+        '''
+        x_tanh = self.neural_network(t, self.weights_trajectories[i], 
+                                    self.biases_trajectories[i], act=tf.nn.tanh)
+        x_relu = self.neural_network(t, self.weights_trajectories_relu[i], 
+                                                 self.biases_trajectories_relu[i],
                                                  act=tf.nn.relu)
-        return self.weight_tanh*x_tanh + self.weight_relu*x_relu
+        return self.weight_tanh[i]*x_tanh + self.weight_relu[i]*x_relu
+    
+    def net_x(self, t):
+        '''
+        return the standardized position of each agent
+        Parameters
+        ----------
+        t : list of tensors
+            standardized time.
+        Returns
+        -------
+        output : list of tensors
+            list of standardized positions of all agents at given time.
+        '''
+        output = []
+        for i in range(self.N):
+            output.append(self.net_x_pv(t[i], i))
+        return output
     
     def net_g(self, t):
         '''
@@ -379,8 +422,6 @@ class NeuralNetwork():
                   (self.epoch, MSEu, MSEf, MSEtrajectories, MSEg, gamma**2, total_loss))
             
         self.epoch += 1
-
-        self.save_loss.append(total_loss)
         
     def loss_callback_trajectory(self, MSEtrajectories, MSEg, total_loss):
         
@@ -400,9 +441,22 @@ class NeuralNetwork():
 
         '''
         
-        tf_dict = {self.x_tf: self.x, self.t_tf: self.t, self.u_tf: self.u, 
-                   self.x_f_tf: self.x_f, self.t_f_tf: self.t_f,
-                   self.t_g_tf: self.t_g}
+        tf_dict = { }
+        
+        for k, v in zip(self.x_tf, self.x):
+            tf_dict[k] = v
+            
+        for k, v in zip(self.t_tf, self.t):
+            tf_dict[k] = v
+            
+        for k, v in zip(self.u_tf, self.u):
+            tf_dict[k] = v
+            
+        for k, v in zip(self.t_g_tf, self.t_g):
+            tf_dict[k] = v
+            
+        tf_dict[self.x_f_tf] = self.x_f
+        tf_dict[self.t_f_tf] = self.t_f
         
         for i in range(len(self.optimizer)):
             print('---> STEP %.0f' % (i+1))
@@ -466,17 +520,17 @@ class OptimizationProcedure():
         for epoch in range(self.epochs):
             mother.epoch = epoch + 1
             if epoch%10 == 0:
-                mother.loss_callback(mother.sess.run(mother.MSEu, {mother.x_tf: mother.x, mother.t_tf: mother.t, mother.u_tf: mother.u}), 
-                                mother.sess.run(mother.MSEf, {mother.x_f_tf: mother.x_f, mother.t_f_tf: mother.t_f}), 
-                                mother.sess.run(mother.MSEtrajectories, {mother.x_tf: mother.x, mother.t_tf: mother.t}), 
-                                mother.sess.run(mother.MSEg, {mother.t_g_tf: mother.t_g}), 
+                mother.loss_callback(mother.sess.run(mother.MSEu, tf_dict), 
+                                mother.sess.run(mother.MSEf, tf_dict), 
+                                mother.sess.run(mother.MSEtrajectories, tf_dict), 
+                                mother.sess.run(mother.MSEg, tf_dict), 
                                 mother.sess.run(self.loss, tf_dict), 
                                 mother.sess.run(mother.gamma_var))
             mother.sess.run(self.optimizer_adam, tf_dict)
-        mother.loss_callback(mother.sess.run(mother.MSEu, {mother.x_tf: mother.x, mother.t_tf: mother.t, mother.u_tf: mother.u}), 
-                             mother.sess.run(mother.MSEf, {mother.x_f_tf: mother.x_f, mother.t_f_tf: mother.t_f}), 
-                             mother.sess.run(mother.MSEtrajectories, {mother.x_tf: mother.x, mother.t_tf: mother.t}), 
-                             mother.sess.run(mother.MSEg, {mother.t_g_tf: mother.t_g}), 
+        mother.loss_callback(mother.sess.run(mother.MSEu, tf_dict), 
+                             mother.sess.run(mother.MSEf, tf_dict), 
+                             mother.sess.run(mother.MSEtrajectories, tf_dict), 
+                             mother.sess.run(mother.MSEg, tf_dict), 
                              mother.sess.run(self.loss, tf_dict), 
                              mother.sess.run(mother.gamma_var))
             

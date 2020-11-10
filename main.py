@@ -25,7 +25,6 @@ rhoBar = 0.2 # Average density of cars on the road
 rhoMax = 120 # Number of vehicles per kilometer
 rhoSigma = 0.6 # initial condition standard deviation
 noise = False # noise on the measurements and on the trajectories
-data_from_pv = True # collect data from PV or randomly inside the domain
 V = lambda rho: Vf*(1-rho) # Equilibrium velocity function
 F = lambda rho: Vf*(1-2*rho) # Flux function of the PDE
 
@@ -68,65 +67,50 @@ def get_probe_vehicle_data(L=-1, Tmax=-1, selectedPacket=-1, totalPacket=-1, noi
         density measurements.
 
     '''
-    if L > 0 and Tmax > 0:
-        N = 1000
-        x_true = np.random.rand(N,1)*L
-        t = np.random.rand(N,1)*Tmax
-        Nt = t.shape[0]
-        rho_true = simu_godunov.getDatas(x_true, t)
-        Nxi = 1
+    x_true, t, rho_true, v_true = simu_godunov.getMeasurements()
+    Nxi = len(x_true)
+ 
+    x_selected = []
+    t_selected = []
+    rho_selected = []
+    v_selected = []
+    for k in range(Nxi):
+     
+        Nt = t[k].shape[0]
+     
+        if totalPacket == -1:
+            totalPacket = Nt
+        if selectedPacket <= 0:
+            selectedPacket = totalPacket
+        elif selectedPacket < 1:
+            selectedPacket = int(np.ceil(totalPacket*selectedPacket))
+     
+        nPackets = int(np.ceil(Nt/totalPacket))
+        toBeSelected = np.empty((0,1), dtype=np.int)
+        for i in range(nPackets):
+            randomPackets = np.arange(i*totalPacket, min((i+1)*totalPacket, Nt), dtype=np.int)
+            np.random.shuffle(randomPackets)
+            if selectedPacket > randomPackets.shape[0]:
+                toBeSelected = np.append(toBeSelected, randomPackets[0:-1])
+            else:
+                toBeSelected = np.append(toBeSelected, randomPackets[0:selectedPacket])
+        toBeSelected = np.sort(toBeSelected) 
         
         if noise:
-            x_selected = x_true+ np.random.normal(0.1, 0.2, N).reshape(-1, 1)
-            rho_temp = rho_true + np.random.normal(0.1, 0.2, N).reshape(-1, 1)
-            rho_selected = np.maximum(np.minimum(rho_temp, 1), 0)
+            noise_trajectory = np.random.normal(0, 2, Nt)
+            noise_trajectory = np.cumsum(noise_trajectory.reshape(-1,), axis=0)
+            noise_meas = np.random.normal(0.1, 0.2, toBeSelected.shape[0]).reshape(-1,)
         else:
-            x_selected = x_true
-            rho_selected = rho_true
-        
-    else:
-        x_true, t, rho_true = simu_godunov.getMeasurements()
-        Nxi = len(x_true)
-        
-        x_selected = []
-        t_selected = []
-        rho_selected = []
-        for k in range(Nxi):
+            noise_trajectory = np.array([0]*Nt)
+            noise_meas = np.array([0]*Nt)
             
-            Nt = t[k].shape[0]
-            
-            if totalPacket == -1:
-                totalPacket = Nt
-            if selectedPacket <= 0:
-                selectedPacket = totalPacket
-            elif selectedPacket < 1:
-                selectedPacket = int(np.ceil(totalPacket*selectedPacket))
-            
-            nPackets = int(np.ceil(Nt/totalPacket))
-            toBeSelected = np.empty((0,1), dtype=np.int)
-            for i in range(nPackets):
-                randomPackets = np.arange(i*totalPacket, min((i+1)*totalPacket, Nt), dtype=np.int)
-                np.random.shuffle(randomPackets)
-                if selectedPacket > randomPackets.shape[0]:
-                    toBeSelected = np.append(toBeSelected, randomPackets[0:-1])
-                else:
-                    toBeSelected = np.append(toBeSelected, randomPackets[0:selectedPacket])
-            toBeSelected = np.sort(toBeSelected) 
-            
-            if noise:
-                noise_trajectory = np.random.normal(0, 2, Nt)
-                noise_trajectory = np.cumsum(noise_trajectory.reshape(-1,), axis=0)
-                noise_meas = np.random.normal(0.1, 0.2, toBeSelected.shape[0]).reshape(-1,)
-            else:
-                noise_trajectory = np.array([0]*Nt)
-                noise_meas = np.array([0]*Nt)
-                
-            x_selected.append(np.reshape(x_true[k][toBeSelected] + noise_trajectory[toBeSelected], (-1,1)))
-            rho_temp = rho_true[k][toBeSelected] + noise_meas
-            rho_selected.append(np.reshape(np.maximum(np.minimum(rho_temp, 1), 0), (-1,1)))
-            t_selected.append(np.reshape(t[k][toBeSelected], (-1,1)))
+        x_selected.append(np.reshape(x_true[k][toBeSelected] + noise_trajectory[toBeSelected], (-1,1)))
+        rho_temp = rho_true[k][toBeSelected] + noise_meas
+        rho_selected.append(np.reshape(np.maximum(np.minimum(rho_temp, 1), 0), (-1,1)))
+        t_selected.append(np.reshape(t[k][toBeSelected], (-1,1)))
+        v_selected.append(np.reshape(v_true[k][toBeSelected], (-1,1)))
 
-    return x_selected, t_selected, rho_selected
+    return x_selected, t_selected, rho_selected, v_selected
 
 Vbar = Vf*(1-rhoBar) # Average speed
 Lplus = Tmax*(Vbar+0.1*Vf)/1.1 # Additionnal length
@@ -148,12 +132,9 @@ simu_godunov.plot()
 axisPlot = simu_godunov.getAxisPlot()
 
 # collect data from PV
-if data_from_pv:
-    x_train, t_train, rho_train = get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=noise)
-else:
-    x_train, t_train, rho_train = get_probe_vehicle_data(L=L, Tmax=Tmax, selectedPacket=-1, totalPacket=-1, noise=noise)
+x_train, t_train, rho_train, v_train = get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=noise)
 
-trained_neural_network = rn.ReconstructionNeuralNetwork(x_train, t_train, rho_train, 
+trained_neural_network = rn.ReconstructionNeuralNetwork(x_train, t_train, rho_train, v_train,
                                                     Ltotal, Tmax, V, F, 
                                                     N_f=7500, N_g=150)
 

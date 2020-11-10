@@ -21,7 +21,7 @@ def hms(seconds):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, x, t, rho, L, Tmax, V, F, N_f=1000, N_g=100):
+    def __init__(self, x, t, rho, v, L, Tmax, V, F, N_f=1000, N_g=100):
         '''
         Initialize a neural network for density reconstruction
 
@@ -33,6 +33,8 @@ class ReconstructionNeuralNetwork():
             time coordinate of training points.
         rho : list of N numpy array of shape (?,)
             density values at training points.
+        v : list of N numpy array of shape (?,)
+            velocity values at training points.
         L : float64
             Length of the spacial domain.
         Tmax : float64
@@ -61,16 +63,16 @@ class ReconstructionNeuralNetwork():
             layers.append(num_nodes_per_layer)
         layers.append(1)
         
-        x_train, t_train, u_train, X_f_train, t_g_train = self.createTrainingDataset(x, t, rho, L, Tmax, N_f, N_g) # Creation of standardized training dataset
-        V_standard = lambda u: V((u+1)/2)*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) # Standardized velocity function
-        F_standard = lambda u: F((u+1)/2)*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) # Standardized flux function
+        x_train, t_train, u_train, v_train, X_f_train, t_g_train = self.createTrainingDataset(x, t, rho, v, L, Tmax, N_f, N_g) # Creation of standardized training dataset
+        # V_standard = lambda u: V((u+1)/2)*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) # Standardized velocity function
+        # F_standard = lambda u: F((u+1)/2)*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) # Standardized flux function
         
-        self.neural_network = NeuralNetwork(x_train, t_train, u_train, X_f_train, t_g_train, layers_density=layers, 
+        self.neural_network = NeuralNetwork(x_train, t_train, u_train, v_train, X_f_train, t_g_train, layers_density=layers, 
                                               layers_trajectories=(1, 5, 5, 5, 1),
-                                              V=V_standard, F=F_standard) # Creation of the neural network
+                                              layers_speed=(1, 5, 5, 1),) # Creation of the neural network
         self.train() # Training of the neural network
             
-    def createTrainingDataset(self, x, t, rho, L, Tmax, N_f, N_g):       
+    def createTrainingDataset(self, x, t, rho, v, L, Tmax, N_f, N_g):       
         '''
         Standardize the dataset
 
@@ -81,7 +83,9 @@ class ReconstructionNeuralNetwork():
         t : list of N arrays of float64 (?,)
             Time coordinate of agents.
         rho : list of N arrays of float64 (?,)
-            Measurement from each agent.
+            Density measurement from each agent.
+        v : list of N arrays of float64 (?,)
+            Velocity measurement from each agent.
         L : float
             Length of the road.
         Tmax : float
@@ -113,6 +117,7 @@ class ReconstructionNeuralNetwork():
         x = [2*(x_temp - self.lb[0])/(self.ub[0] - self.lb[0]) - 1 for x_temp in x]
         t = [2*(t_temp - self.lb[1])/(self.ub[1] - self.lb[1]) - 1 for t_temp in t]
         rho = [2*rho_temp-1 for rho_temp in rho]
+        v = [v_temp*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) for v_temp in v]
         
         X_f = np.array([2, 2])*lhs(2, samples=N_f)
         X_f = X_f - np.ones(X_f.shape)
@@ -122,7 +127,7 @@ class ReconstructionNeuralNetwork():
         for i in range(self.Nxi):
             t_g.append(np.amin(t[i]) + lhs(1, samples=N_g)*(np.amax(t[i]) - np.amin(t[i])))
         
-        return (x, t, rho, X_f, t_g)
+        return (x, t, rho, v, X_f, t_g)
 
     def train(self):
         '''
