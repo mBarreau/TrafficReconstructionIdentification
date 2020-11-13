@@ -18,6 +18,14 @@ def hms(seconds):
     h, m = divmod(m, 60)
     h, m, s = int(h), int(m), int(s)
     print('{:.0f}h {:.0f}m {:.0f}s'.format(h, m, s))
+    
+def amin(l):
+    min_list = [np.amin(l[i]) for i in range(len(l))]
+    return np.amin(min_list)
+
+def amax(l):
+    min_list = [np.amax(l[i]) for i in range(len(l))]
+    return np.amax(min_list)
 
 class ReconstructionNeuralNetwork():
     
@@ -109,8 +117,8 @@ class ReconstructionNeuralNetwork():
 
         '''
         
-        self.lb = np.array([np.amin(x), np.amin(t)])
-        self.ub = np.array([np.amax(x), np.amax(t)])
+        self.lb = np.array([amin(x), amin(t)])
+        self.ub = np.array([amax(x), amax(t)])
         self.lb[0], self.lb[1] = 0, 0
         
         x = [2*(x_temp - self.lb[0])/(self.ub[0] - self.lb[0]) - 1 for x_temp in x]

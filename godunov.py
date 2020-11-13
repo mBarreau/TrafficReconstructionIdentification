@@ -20,11 +20,7 @@ def flux(Vf, greenshield=True):
     else: 
         rhoc = 0.25
         def f(rho):
-            if rho >= rhoc:
-                output = Vf*rho
-            else:
-                output = Vf*rhoc*(rho - 1)/(rhoc - 1)
-            return output           
+            return Vf*rho*(rho <= rhoc) + Vf*rhoc*(rho - 1)/(rhoc - 1)*(rho > rhoc)           
     return (f, rhoc)
 
 class PhysicsSim:
@@ -89,11 +85,7 @@ class ProbeVehicles:
                     
         return (xMeasurements, tMeasurements, zMeasurements, vMeasurements)
     
-    def plot(self, t):
-        # it = np.round(np.arange(0, self.sim.Nt, self.sim.Nt/len(t))).astype(int)
-        # xiArrayPlot = self.xiArray[:, it]
-        # x = xiArrayPlot
-        
+    def plot(self):
         for j in range(self.Nxi):
             plt.plot(self.xiTArray[j], self.xiArray[j], color='red')
         
@@ -308,7 +300,7 @@ class SimuGodunov:
         plt.ylim(0, self.sim.L)
         plt.colorbar()
         plt.tight_layout()
-        self.pv.plot(self.t)
+        self.pv.plot()
         plt.show()
         fig.savefig('density.eps', bbox_inches='tight')
         
@@ -382,7 +374,7 @@ class SimuGodunov:
                 noise_meas = np.array([0]*Nt)
                 
             x_selected.append(np.reshape(x_true[k][toBeSelected] + noise_trajectory[toBeSelected], (-1,1)))
-            rho_temp = rho_true[k][toBeSelected] + noise_meas
+            rho_temp = rho_true[k][toBeSelected] + noise_meas[toBeSelected]
             rho_selected.append(np.reshape(np.maximum(np.minimum(rho_temp, 1), 0), (-1,1)))
             t_selected.append(np.reshape(t[k][toBeSelected], (-1,1)))
             v_selected.append(np.reshape(v_true[k][toBeSelected], (-1,1)))

@@ -24,14 +24,9 @@ L = 5000 # Length of the road
 rhoBar = 0.2 # Average density of cars on the road
 rhoMax = 120 # Number of vehicles per kilometer
 rhoSigma = 0.6 # initial condition standard deviation
-noise = True # noise on the measurements and on the trajectories
-greenshield = True # Type of flux function used for the numerical simulation
-
-Vbar = Vf*(1-rhoBar) # Average speed
-Lplus = Tmax*(Vbar+0.1*Vf)/1.1 # Additionnal length
-Ltotal = L + Lplus
-
-Ncar = rhoBar*rhoMax*Ltotal/1000 # Number of cars
+noise = False # noise on the measurements and on the trajectories
+greenshield = False # Type of flux function used for the numerical simulation
+Ncar = rhoBar*rhoMax*L/1000 # Number of cars
 Npv = int(Ncar*p) # Number of PV
 
 # Initial position and time of probes vehicles
@@ -40,7 +35,7 @@ xiPos = np.flip(np.sort(xiPos))
 xiT = np.array([0]*Npv)
 
 # Godunov simulation of the PDE
-simu_godunov = g.SimuGodunov(Vf, gamma, xiPos, xiT, L=Ltotal, Tmax=Tmax,
+simu_godunov = g.SimuGodunov(Vf, gamma, xiPos, xiT, L=L, Tmax=Tmax,
                              zMin=0, zMax=1, Nx=1000, greenshield=greenshield,
                              rhoBar=rhoBar, rhoSigma=rhoSigma)
 rho = simu_godunov.simulation()
@@ -51,10 +46,10 @@ axisPlot = simu_godunov.getAxisPlot()
 t_train, x_train, rho_train, v_train = simu_godunov.getMeasurements(selectedPacket=-1, totalPacket=-1, noise=noise)
 
 trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
-                                                    Ltotal, Tmax, N_f=7500, N_g=150)
+                                                    L, Tmax, N_f=7500, N_g=150)
 
 [_, _, figError] = trained_neural_network.plot(axisPlot, rho)
-simu_godunov.pv.plot(axisPlot[1])
+simu_godunov.pv.plot()
 plt.show()
 figError.savefig('error.eps', bbox_inches='tight')
 
