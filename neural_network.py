@@ -164,12 +164,12 @@ class NeuralNetwork():
                                                                           'maxcor': 50,
                                                                           'maxls': 50,
                                                                           'ftol': 5.0 * np.finfo(float).eps}))
-        # self.optimizer.append(OptimizationProcedure(self, self.MSEu + 0.5*self.MSEg, 100, {'maxiter': 1000,
-        #                                                                   'maxfun': 5000,
-        #                                                                   'maxcor': 50,
-        #                                                                   'maxls': 20,
-        #                                                                   'ftol': 5.0 * np.finfo(float).eps},
-        #                                             var_list=list_var_density))
+        self.optimizer.append(OptimizationProcedure(self, self.MSEu + 0.5*self.MSEg, 100, {'maxiter': 1000,
+                                                                          'maxfun': 5000,
+                                                                          'maxcor': 50,
+                                                                          'maxls': 20,
+                                                                          'ftol': 5.0 * np.finfo(float).eps},
+                                                    var_list=list_var_density))
         self.optimizer.append(OptimizationProcedure(self, self.loss, 200, {'maxiter': 1000,
                                                                           'maxfun': 1000,
                                                                           'maxcor': 50,
@@ -300,14 +300,41 @@ class NeuralNetwork():
         return tf.add(tf.matmul(H, W), b)
     
     def net_v(self, u):
+        '''
+        Standardized velocity
+
+        Parameters
+        ----------
+        u : float32
+            Standardized density.
+
+        Returns
+        -------
+        TYPE
+            Standardized velocity.
+
+        '''
         return tf.square(self.neural_network(u, self.weights_speed, 
                                 self.biases_speed, act=tf.nn.tanh))*(1-u)
     
     def net_F(self, u):
+        '''
+        Characteristic speed
+
+        Parameters
+        ----------
+        u : float32
+            standardized density.
+
+        Returns
+        -------
+        TYPE
+            standardized characteristic speed.
+
+        '''
         v = self.net_v(u)
         v_u = tf.gradients(v, u)[0]
         return v + (u+1)*v_u 
-        # return - 0.3684 * u
 
     def net_u(self, t, x):
         '''
