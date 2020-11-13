@@ -18,7 +18,7 @@ import numpy as np
 
 class NeuralNetwork():
 
-    def __init__(self, x, t, u, v, X_f, t_g, layers_density, layers_trajectories, layers_speed,
+    def __init__(self, t, x, u, v, X_f, t_g, layers_density, layers_trajectories, layers_speed,
                  init_density=[[], []], init_trajectories=[[[], []], [[], []], 1, 0.01], init_speed=[[], []]):
      
         '''
@@ -26,11 +26,11 @@ class NeuralNetwork():
 
         Parameters
         ----------
-        x : 2D numpy array of shape (N_data, N)
-            standardized space coordinate of training points.
-        t : 1D numpy array of shape (N_data, 1)
+        t : list of N numpy array of shape (?,)
             standardized time coordinate of training points.
-        u : 2D numpy array of shape (N_data, N)
+        x : list of N numpy array of shape (?,)
+            standardized space coordinate of training points.
+        u : list of N numpy array of shape (?,)
             standardized density values at training points.
         v : list of N numpy array of shape (?,)
             standardized velocity values at training points.
@@ -60,8 +60,8 @@ class NeuralNetwork():
 
         '''
 
-        self.x = x 
         self.t = t
+        self.x = x 
         self.u = u 
         self.v = v
 
@@ -108,8 +108,8 @@ class NeuralNetwork():
             self.weights_trajectories_relu.append(weights_trajectories_relu)
             self.biases_trajectories_relu.append(biases_trajectories_relu)
             
-            self.weight_tanh.append(tf.Variable(init_trajectories[-2], dtype=tf.float32, trainable=True))
-            self.weight_relu.append(tf.Variable(0, dtype=tf.float32, trainable=False))
+            self.weight_tanh.append(tf.Variable(1, dtype=tf.float32, trainable=False)) # init_trajectories[-2]
+            self.weight_relu.append(tf.Variable(0, dtype=tf.float32, trainable=False)) # init_trajectories[-1]
             
         # V neural network
         self.weights_speed, self.biases_speed = self.initialize_neural_network(layers_speed, init_speed[0], init_speed[1], act="tanh")
@@ -118,16 +118,16 @@ class NeuralNetwork():
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True,
                                                      log_device_placement=True))
 
-        # PDE part       
-        self.x_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
+        # PDE part     
         self.t_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
+        self.x_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
         self.u_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
         self.v_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
         self.x_f_tf = tf.placeholder(tf.float32, shape=[None, self.x_f.shape[1]])
         self.t_f_tf = tf.placeholder(tf.float32, shape=[None, self.t_f.shape[1]])
         
-        self.u_pred = [self.net_u(self.net_x_pv(self.t_tf[i], i), self.t_tf[i]) for i in range(self.N)] 
-        self.f_pred = self.net_f(self.x_f_tf, self.t_f_tf)        
+        self.u_pred = [self.net_u(self.t_tf[i], self.net_x_pv(self.t_tf[i], i)) for i in range(self.N)] 
+        self.f_pred = self.net_f(self.t_f_tf, self.x_f_tf)        
         
         # Agents part
         self.t_g_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
@@ -147,37 +147,39 @@ class NeuralNetwork():
             self.MSEtrajectories = self.MSEtrajectories + tf.reduce_mean(tf.square(self.x_tf[i] - self.x_pred[i]))/self.N
             self.MSEg = self.MSEg + tf.reduce_mean(tf.square(self.g_pred[i]))/self.N
             
-        self.MSEv = 0
+        self.MSEv1 = 0
+        self.MSEv2 = 0
         for i in range(self.N):
-            self.MSEv = self.MSEv + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.u_tf[i])))/self.N
+            self.MSEv1 = self.MSEv1 + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.u_tf[i] - self.noise_rho_bar[i] )))/self.N
+            self.MSEv2 = self.MSEv1 + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.net_u(self.t_tf[i], self.x_tf[i]))))/self.N
         
-        self.loss_trajectories = self.MSEtrajectories + 0*self.MSEg + self.MSEv
-        self.loss = self.MSEu + 0.1*self.MSEf + 0.5*self.MSEtrajectories + 0.1*self.MSEg + self.MSEv
-        self.loss_precise = self.MSEu + self.MSEf + self.MSEtrajectories + 0.5*self.MSEg + self.MSEv + 0.1*tf.square(self.gamma_var)
+        self.loss_trajectories = self.MSEtrajectories + 0*self.MSEg + self.MSEv1
+        self.loss = self.MSEu + 0.8*self.MSEf + self.MSEg + 0.5*self.MSEv2 + 0.5*self.MSEv1
+        self.loss_precise = self.MSEu + 0.5*self.MSEf + self.MSEtrajectories + 0.5*self.MSEg + 0.8*self.MSEv2 + 0.2*self.MSEv1 + 0.1*tf.square(self.gamma_var)
         
         # Definition of the training procedure
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss_trajectories, 100, {'maxiter': 1000,
-                                                                          'maxfun': 5000,
+        self.optimizer.append(OptimizationProcedure(self, self.loss_trajectories, 100, {'maxiter': 200,
+                                                                          'maxfun': 200,
                                                                           'maxcor': 50,
                                                                           'maxls': 50,
                                                                           'ftol': 5.0 * np.finfo(float).eps}))
-        # self.optimizer.append(OptimizationProcedure(self, self.MSEg, 100, {'maxiter': 1000,
+        # self.optimizer.append(OptimizationProcedure(self, self.MSEu + 0.5*self.MSEg, 100, {'maxiter': 1000,
         #                                                                   'maxfun': 5000,
         #                                                                   'maxcor': 50,
         #                                                                   'maxls': 20,
         #                                                                   'ftol': 5.0 * np.finfo(float).eps},
         #                                             var_list=list_var_density))
-        self.optimizer.append(OptimizationProcedure(self, self.loss, 1000, {'maxiter': 4000,
-                                                                          'maxfun': 5000,
+        self.optimizer.append(OptimizationProcedure(self, self.loss, 200, {'maxiter': 1000,
+                                                                          'maxfun': 1000,
                                                                           'maxcor': 50,
                                                                           'maxls': 20,
                                                                           'ftol': 5.0 * np.finfo(float).eps}, 
-                                                    var_list=list_var_density))
+                                                    var_list=list_var_density+self.weights_speed+self.biases_speed))
         self.optimizer.append(OptimizationProcedure(self, self.loss_precise, 0, {'maxiter': 10000,
-                                                                          'maxfun': 50000,
-                                                                          'maxcor': 150,
-                                                                          'maxls': 75,
+                                                                          'maxfun': 10000,
+                                                                          'maxcor': 100,
+                                                                          'maxls': 50,
                                                                           'ftol': 1.0 * np.finfo(float).eps}))
 
         # Initialize the TF session
@@ -261,8 +263,8 @@ class NeuralNetwork():
         if act == "relu":
             return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], mean=init, stddev=xavier_stddev, dtype=tf.float32), dtype=tf.float32)
         else:
-            #return tf.Variable(init + tf.random.uniform([in_dim, out_dim], minval=init-xavier_bound, maxval=init+xavier_bound, dtype=tf.float32), dtype=tf.float32)
-            return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], mean=init, stddev=xavier_bound*np.sqrt(2/6), dtype=tf.float32), dtype=tf.float32)
+            return tf.Variable(init + tf.random.uniform([in_dim, out_dim], minval=init-xavier_bound, maxval=init+xavier_bound, dtype=tf.float32), dtype=tf.float32)
+            #return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], mean=init, stddev=xavier_bound*np.sqrt(2/6), dtype=tf.float32), dtype=tf.float32)
            
     
     def neural_network(self, X, weights, biases, act=tf.nn.tanh):
@@ -298,8 +300,8 @@ class NeuralNetwork():
         return tf.add(tf.matmul(H, W), b)
     
     def net_v(self, u):
-        return self.neural_network(u, self.weights_speed, 
-                                self.biases_speed, act=tf.nn.tanh)*(1-u)
+        return tf.square(self.neural_network(u, self.weights_speed, 
+                                self.biases_speed, act=tf.nn.tanh))*(1-u)
     
     def net_F(self, u):
         v = self.net_v(u)
@@ -307,16 +309,16 @@ class NeuralNetwork():
         return v + (u+1)*v_u 
         # return - 0.3684 * u
 
-    def net_u(self, x, t):
+    def net_u(self, t, x):
         '''
         return the standardized value of rho hat at position (t, x)
 
         Parameters
         ----------
-        x : tensor
-            standardized space location.
         t : tensor
             standardized time location.
+        x : tensor
+            standardized space location.
 
         Returns
         -------
@@ -329,16 +331,16 @@ class NeuralNetwork():
                                 self.biases_density, act=tf.nn.tanh)
         return u_tanh
 
-    def net_f(self, x, t):
+    def net_f(self, t, x):
         '''
         return the physics function f at position (t,x)
 
         Parameters
         ----------
-        x : tensor
-            standardized space location.
         t : tensor
             standardized time location.
+        x : tensor
+            standardized space location.
 
         Returns
         -------
@@ -347,7 +349,7 @@ class NeuralNetwork():
 
         '''
         
-        u = self.net_u(x, t)
+        u = self.net_u(t, x)
         u_t = tf.gradients(u, t)[0]
         u_x = tf.gradients(u, x)[0]
         u_xx = tf.gradients(u_x, x)[0]
@@ -412,23 +414,15 @@ class NeuralNetwork():
         g = []
         for i in range(len(x_trajectories)):
             x_t = tf.gradients(x_trajectories[i], t[i])[0]
-            u = self.net_u(x_trajectories[i], t[i])
+            u = self.net_u(t[i], x_trajectories[i])
             g.append(x_t - self.net_v(u))
         return g
 
-    def loss_callback(self, MSEu, MSEf, MSEtrajectories, MSEg, total_loss, gamma):
+    def loss_callback(self, MSEu, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, total_loss, gamma):
         
         if self.epoch%10 == 1:
-            print('Epoch: %.0f | MSEu: %.5e | MSEf: %.5e | MSEtrajectories: %.5e | MSEg: %.5e | Gamma: %.5e | Total: %.5e' %
-                  (self.epoch, MSEu, MSEf, MSEtrajectories, MSEg, gamma**2, total_loss))
-            
-        self.epoch += 1
-        
-    def loss_callback_trajectory(self, MSEtrajectories, MSEg, total_loss):
-        
-        if self.epoch%10 == 1:
-            print('Epoch: %.0f | MSEtrajectories: %.5e | MSEg: %.5e | Total: %.5e' %
-                  (self.epoch, MSEtrajectories, MSEg, total_loss))
+            print('Epoch: %.0f | MSEu: %.5e | MSEf: %.5e | MSEtrajectories: %.5e | MSEg: %.5e | MSEv1: %.5e | MSEv2: %.5e | Gamma: %.5e | Total: %.5e' %
+                  (self.epoch, MSEu, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, gamma**2, total_loss))
             
         self.epoch += 1
 
@@ -459,24 +453,24 @@ class NeuralNetwork():
         for k, v in zip(self.t_g_tf, self.t_g):
             tf_dict[k] = v
             
-        tf_dict[self.x_f_tf] = self.x_f
         tf_dict[self.t_f_tf] = self.t_f
+        tf_dict[self.x_f_tf] = self.x_f
         
         for i in range(len(self.optimizer)):
             print('---> STEP %.0f' % (i+1))
             self.epoch = 1
             self.optimizer[i].train(tf_dict)    
     
-    def predict(self, x, t):
+    def predict(self, t, x):
         '''
         Return the standardized estimated density at (t, x)
 
         Parameters
         ----------
-        x : numpy array (?, )
-            standardized space coordinate.
         t : numpy array (?, )
             standardized time coordinate.
+        x : numpy array (?, )
+            standardized space coordinate.
 
         Returns
         -------
@@ -484,9 +478,10 @@ class NeuralNetwork():
             standardized estimated density.
 
         '''
-        x = np.float32(x)
         t = np.float32(t)
-        return np.minimum(np.maximum(self.sess.run(self.net_u(x,t)), -1), 1)
+        x = np.float32(x)
+
+        return np.minimum(np.maximum(self.sess.run(self.net_u(t, x)), -1), 1)
     
     def predict_speed(self, u):
         '''
@@ -567,6 +562,8 @@ class OptimizationProcedure():
                                 mother.sess.run(mother.MSEf, tf_dict), 
                                 mother.sess.run(mother.MSEtrajectories, tf_dict), 
                                 mother.sess.run(mother.MSEg, tf_dict), 
+                                mother.sess.run(mother.MSEv1, tf_dict), 
+                                mother.sess.run(mother.MSEv2, tf_dict), 
                                 mother.sess.run(self.loss, tf_dict), 
                                 mother.sess.run(mother.gamma_var))
             mother.sess.run(self.optimizer_adam, tf_dict)
@@ -574,6 +571,8 @@ class OptimizationProcedure():
                              mother.sess.run(mother.MSEf, tf_dict), 
                              mother.sess.run(mother.MSEtrajectories, tf_dict), 
                              mother.sess.run(mother.MSEg, tf_dict), 
+                             mother.sess.run(mother.MSEv1, tf_dict), 
+                             mother.sess.run(mother.MSEv2, tf_dict), 
                              mother.sess.run(self.loss, tf_dict), 
                              mother.sess.run(mother.gamma_var))
             
@@ -581,5 +580,6 @@ class OptimizationProcedure():
         self.optimizer_BFGS.minimize(mother.sess,
                                 feed_dict=tf_dict,
                                 fetches=[mother.MSEu, mother.MSEf, mother.MSEtrajectories, 
-                                         mother.MSEg, self.loss, mother.gamma_var],
+                                         mother.MSEg, mother.MSEv1, mother.MSEv2, 
+                                         self.loss, mother.gamma_var],
                                 loss_callback=mother.loss_callback)

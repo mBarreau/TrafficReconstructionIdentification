@@ -17,14 +17,15 @@ from pyDOE import lhs
 #####################################
 
 Vf = 25 # Maximum car speed in m.s^-1
-gamma = 0 # dissipativity coefficient (0 by default, discrepencies may occur if very small)
+gamma = 0 # dissipativity coefficient (0 by default, discrepencies may occur if very small and not zero)
 Tmax = 100 # simulation time
 p = 1/15 # Probability that a car is a PV
 L = 5000 # Length of the road
 rhoBar = 0.2 # Average density of cars on the road
 rhoMax = 120 # Number of vehicles per kilometer
 rhoSigma = 0.6 # initial condition standard deviation
-noise = False # noise on the measurements and on the trajectories
+noise = True # noise on the measurements and on the trajectories
+greenshield = True # Type of flux function used for the numerical simulation
 
 def get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=False):
     '''
@@ -90,7 +91,7 @@ def get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=False):
         if noise:
             noise_trajectory = np.random.normal(0, 2, Nt)
             noise_trajectory = np.cumsum(noise_trajectory.reshape(-1,), axis=0)
-            noise_meas = np.random.normal(0.1, 0.2, toBeSelected.shape[0]).reshape(-1,)
+            noise_meas = np.random.normal(0.01, 0.05, toBeSelected.shape[0]).reshape(-1,)
         else:
             noise_trajectory = np.array([0]*Nt)
             noise_meas = np.array([0]*Nt)
@@ -101,7 +102,7 @@ def get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=False):
         t_selected.append(np.reshape(t[k][toBeSelected], (-1,1)))
         v_selected.append(np.reshape(v_true[k][toBeSelected], (-1,1)))
 
-    return x_selected, t_selected, rho_selected, v_selected
+    return t_selected, x_selected, rho_selected, v_selected
 
 Vbar = Vf*(1-rhoBar) # Average speed
 Lplus = Tmax*(Vbar+0.1*Vf)/1.1 # Additionnal length
@@ -117,15 +118,16 @@ xiT = np.array([0]*Npv)
 
 # Godunov simulation of the PDE
 simu_godunov = g.SimuGodunov(Vf, gamma, xiPos, xiT, L=Ltotal, Tmax=Tmax,
-                             zMin=0, zMax=1, Nx=1000, rhoBar=rhoBar, rhoSigma=rhoSigma)
+                             zMin=0, zMax=1, Nx=1000, greenshield=greenshield,
+                             rhoBar=rhoBar, rhoSigma=rhoSigma)
 rho = simu_godunov.simulation()
 simu_godunov.plot()
 axisPlot = simu_godunov.getAxisPlot()
 
 # collect data from PV
-x_train, t_train, rho_train, v_train = get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=noise)
+t_train, x_train, rho_train, v_train = get_probe_vehicle_data(selectedPacket=-1, totalPacket=-1, noise=noise)
 
-trained_neural_network = rn.ReconstructionNeuralNetwork(x_train, t_train, rho_train, v_train,
+trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
                                                     Ltotal, Tmax, N_f=7500, N_g=150)
 
 [_, _, figError] = trained_neural_network.plot(axisPlot, rho)

@@ -21,16 +21,16 @@ def hms(seconds):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, x, t, rho, v, L, Tmax, N_f=1000, N_g=100):
+    def __init__(self, t, x, rho, v, L, Tmax, N_f=1000, N_g=100):
         '''
         Initialize a neural network for density reconstruction
 
         Parameters
         ----------
-        x : list of N numpy array of shape (?,)
-            space coordinate of training points.
         t : List of N numpy array of shape (?,)
             time coordinate of training points.
+        x : list of N numpy array of shape (?,)
+            space coordinate of training points.
         rho : list of N numpy array of shape (?,)
             density values at training points.
         v : list of N numpy array of shape (?,)
@@ -52,6 +52,9 @@ class ReconstructionNeuralNetwork():
         
         self.Nxi = len(x) # Number of agents
         
+        self.rho = rho
+        self.v = v
+        
         num_hidden_layers = int(Tmax*8/100) 
         num_nodes_per_layer = int(20*L/7000) 
         layers = [2] # There are two inputs: space and time
@@ -59,25 +62,23 @@ class ReconstructionNeuralNetwork():
             layers.append(num_nodes_per_layer)
         layers.append(1)
         
-        x_train, t_train, u_train, v_train, X_f_train, t_g_train = self.createTrainingDataset(x, t, rho, v, L, Tmax, N_f, N_g) # Creation of standardized training dataset
-        # V_standard = lambda u: V((u+1)/2)*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) # Standardized velocity function
-        # F_standard = lambda u: F((u+1)/2)*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) # Standardized flux function
+        t_train, x_train, u_train, v_train, X_f_train, t_g_train = self.createTrainingDataset(t, x, rho, v, L, Tmax, N_f, N_g) # Creation of standardized training dataset
         
-        self.neural_network = NeuralNetwork(x_train, t_train, u_train, v_train, X_f_train, t_g_train, layers_density=layers, 
-                                              layers_trajectories=(1, 5, 5, 5, 1),
-                                              layers_speed=(1, 5, 5, 1),) # Creation of the neural network
+        self.neural_network = NeuralNetwork(t_train, x_train, u_train, v_train, X_f_train, t_g_train, layers_density=layers, 
+                                            layers_trajectories=(1, 5, 5, 5, 5, 1), 
+                                            layers_speed=(1, 5, 5, 1),) # Creation of the neural network
         self.train() # Training of the neural network
             
-    def createTrainingDataset(self, x, t, rho, v, L, Tmax, N_f, N_g):       
+    def createTrainingDataset(self, t, x, rho, v, L, Tmax, N_f, N_g):       
         '''
         Standardize the dataset
 
         Parameters
         ----------
-        x : list of N arrays of float64 (?,)
-            Position of agents along time.
         t : list of N arrays of float64 (?,)
             Time coordinate of agents.
+        x : list of N arrays of float64 (?,)
+            Position of agents along time.
         rho : list of N arrays of float64 (?,)
             Density measurement from each agent.
         v : list of N arrays of float64 (?,)
@@ -93,12 +94,14 @@ class ReconstructionNeuralNetwork():
 
         Returns
         -------
-        x : list of N arrays of float64 (?,)
-            Standardized position of agents along time.
         t : list of N arrays of float64 (?,)
             Standardized time coordinate of agents.
+        x : list of N arrays of float64 (?,)
+            Standardized position of agents along time.
         u : list of N arrays of float64 (?,)
-            Standardized measurement from each agent.
+            Standardized density measurement from each agent.
+        v : list of N arrays of float64 (?,)
+            Standardized velocity measurement from each agent.
         X_f : 2D array of shape (N_f, 2)
             Standardized location of physical points for f.
         t_g : list of float64
@@ -123,7 +126,7 @@ class ReconstructionNeuralNetwork():
         for i in range(self.Nxi):
             t_g.append(np.amin(t[i]) + lhs(1, samples=N_g)*(np.amax(t[i]) - np.amin(t[i])))
         
-        return (x, t, rho, v, X_f, t_g)
+        return (t, x, rho, v, X_f, t_g)
 
     def train(self):
         '''
@@ -138,16 +141,16 @@ class ReconstructionNeuralNetwork():
         self.neural_network.train()
         hms(time() - start)
         
-    def predict(self, x, t):
+    def predict(self, t, x):
         '''
         Return the estimated density at (t, x)
 
         Parameters
         ----------
-        x : numpy array (?, )
-            space coordinate.
         t : numpy array (?, )
             time coordinate.
+        x : numpy array (?, )
+            space coordinate.
 
         Returns
         -------
@@ -159,7 +162,7 @@ class ReconstructionNeuralNetwork():
         x = 2*(x - self.lb[0])/(self.ub[0] - self.lb[0])-1
         t = 2*(t - self.lb[1])/(self.ub[1] - self.lb[1])-1
         
-        return self.neural_network.predict(x, t)/2+0.5
+        return self.neural_network.predict(t, x)/2+0.5
     
     def predict_speed(self, rho):
         '''
@@ -252,12 +255,12 @@ class ReconstructionNeuralNetwork():
         k = 0
         for i in range(0, Nx):
             for j in range(0, Nt):
-                XY_prediction[k] = np.array([x[i], t[j]])
+                XY_prediction[k] = np.array([t[j], x[i]])
                 k = k + 1
-        xstar = XY_prediction[:, 0:1]
-        tstar = XY_prediction[:, 1:2]
+        tstar = XY_prediction[:, 0:1]
+        xstar = XY_prediction[:, 1:2]
         
-        rho_prediction = self.predict(xstar, tstar).reshape(Nx, Nt)
+        rho_prediction = self.predict(tstar, xstar).reshape(Nx, Nt)
         t_pred = [t.reshape(t.shape[0], 1)]*self.Nxi
         X_prediction = self.predict_trajectories(t_pred)
         rho_speed = np.linspace(0, 1).reshape(-1,1)
@@ -265,12 +268,20 @@ class ReconstructionNeuralNetwork():
         F_prediction = self.predict_F(rho_speed).reshape(-1,1)
         
         figSpeed = plt.figure(figsize=(7.5, 5))
-        plt.plot(rho_speed, v_prediction, rasterized=True)
-        plt.plot(rho_speed, F_prediction, rasterized=True)
+        plt.plot(rho_speed, v_prediction, rasterized=True, label=r'NN approximation of $V$')
+        plt.plot(rho_speed, F_prediction, rasterized=True, label=r'NN approximation of $F$')
+        densityMeasurements = np.empty((0,1))
+        speedMeasurements = np.empty((0,1))
+        for i in range(self.Nxi):
+            densityMeasurements = np.vstack((densityMeasurements, self.rho[i]))
+            speedMeasurements = np.vstack((speedMeasurements, self.v[i]))
+        plt.scatter(densityMeasurements, speedMeasurements, rasterized=True, c='black', s=1, label=r'Data')
         plt.xlabel(r'Normalized Density')
         plt.ylabel(r'Speed [km/h]')
+        plt.ylim(-v_prediction[0], v_prediction[0])
         plt.xlim(0, 1)
         plt.grid()
+        plt.legend()
         plt.tight_layout()
         # plt.title('Reconstruction')
         plt.show()
