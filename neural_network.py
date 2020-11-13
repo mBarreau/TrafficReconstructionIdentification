@@ -442,11 +442,11 @@ class NeuralNetwork():
             g.append(x_t - self.net_v(u))
         return g
 
-    def loss_callback(self, MSEu, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, total_loss, gamma):
+    def loss_callback(self, MSEu1, MSEu2, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, total_loss, gamma):
         
         if self.epoch%10 == 1:
-            print('Epoch: %.0f | MSEu: %.5e | MSEf: %.5e | MSEtrajectories: %.5e | MSEg: %.5e | MSEv1: %.5e | MSEv2: %.5e | Gamma: %.5e | Total: %.5e' %
-                  (self.epoch, MSEu, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, gamma**2, total_loss))
+            print('Epoch: %.0f | MSEu1: %.5e | MSEu2: %.5e | MSEf: %.5e | MSEtrajectories: %.5e | MSEg: %.5e | MSEv1: %.5e | MSEv2: %.5e | Gamma: %.5e | Total: %.5e' %
+                  (self.epoch, MSEu1, MSEu2, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, gamma**2, total_loss))
             
         self.epoch += 1
 
@@ -582,7 +582,8 @@ class OptimizationProcedure():
         for epoch in range(self.epochs):
             mother.epoch = epoch + 1
             if epoch%10 == 0:
-                mother.loss_callback(mother.sess.run(mother.MSEu, tf_dict), 
+                mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
+                                mother.sess.run(mother.MSEu2, tf_dict), 
                                 mother.sess.run(mother.MSEf, tf_dict), 
                                 mother.sess.run(mother.MSEtrajectories, tf_dict), 
                                 mother.sess.run(mother.MSEg, tf_dict), 
@@ -591,7 +592,8 @@ class OptimizationProcedure():
                                 mother.sess.run(self.loss, tf_dict), 
                                 mother.sess.run(mother.gamma_var))
             mother.sess.run(self.optimizer_adam, tf_dict)
-        mother.loss_callback(mother.sess.run(mother.MSEu, tf_dict), 
+        mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
+                             mother.sess.run(mother.MSEu2, tf_dict), 
                              mother.sess.run(mother.MSEf, tf_dict), 
                              mother.sess.run(mother.MSEtrajectories, tf_dict), 
                              mother.sess.run(mother.MSEg, tf_dict), 
@@ -603,7 +605,7 @@ class OptimizationProcedure():
         print('------> BFGS')
         self.optimizer_BFGS.minimize(mother.sess,
                                 feed_dict=tf_dict,
-                                fetches=[mother.MSEu, mother.MSEf, mother.MSEtrajectories, 
+                                fetches=[mother.MSEu1, mother.MSEu2, mother.MSEf, mother.MSEtrajectories, 
                                          mother.MSEg, mother.MSEv1, mother.MSEv2, 
                                          self.loss, mother.gamma_var],
                                 loss_callback=mother.loss_callback)
