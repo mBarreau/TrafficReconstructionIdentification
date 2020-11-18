@@ -62,9 +62,10 @@ class ReconstructionNeuralNetwork():
         
         self.rho = rho
         self.v = v
+        self.t = t
         
-        num_hidden_layers = int(Tmax*8/100) 
-        num_nodes_per_layer = int(20*L/7000) 
+        num_hidden_layers = int(5*Tmax) 
+        num_nodes_per_layer = int(3*L) 
         layers = [2] # There are two inputs: space and time
         for _ in range(num_hidden_layers):
             layers.append(num_nodes_per_layer)
@@ -74,7 +75,7 @@ class ReconstructionNeuralNetwork():
         
         self.neural_network = NeuralNetwork(t_train, x_train, u_train, v_train, X_f_train, t_g_train, layers_density=layers, 
                                             layers_trajectories=(1, 5, 5, 5, 5, 1), 
-                                            layers_speed=(1, 5, 5, 1),) # Creation of the neural network
+                                            layers_speed=(1, 5, 5, 5, 1),) # Creation of the neural network
         self.train() # Training of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, L, Tmax, N_f, N_g):       
@@ -269,7 +270,7 @@ class ReconstructionNeuralNetwork():
         xstar = XY_prediction[:, 1:2]
         
         rho_prediction = self.predict(tstar, xstar).reshape(Nx, Nt)
-        t_pred = [t.reshape(t.shape[0], 1)]*self.Nxi
+        t_pred = [(np.linspace(np.amin(self.t[i]), np.amax(self.t[i]), t.shape[0])).reshape(-1, 1) for i in range(self.Nxi)]
         X_prediction = self.predict_trajectories(t_pred)
         rho_speed = np.linspace(0, 1).reshape(-1,1)
         v_prediction = self.predict_speed(rho_speed).reshape(-1,1)
@@ -285,8 +286,8 @@ class ReconstructionNeuralNetwork():
             speedMeasurements = np.vstack((speedMeasurements, self.v[i]))
         plt.scatter(densityMeasurements, speedMeasurements, rasterized=True, c='black', s=1, label=r'Data')
         plt.xlabel(r'Normalized Density')
-        plt.ylabel(r'Speed [km/h]')
-        plt.ylim(-v_prediction[0], v_prediction[0])
+        plt.ylabel(r'Speed [km/min]')
+        # plt.ylim(-v_prediction[0], v_prediction[0])
         plt.xlim(0, 1)
         plt.grid()
         plt.legend()
@@ -300,8 +301,8 @@ class ReconstructionNeuralNetwork():
         plt.pcolor(X, Y, rho_prediction, vmin=0.0, vmax=1.0, shading='auto', rasterized=True)
         for i in range(self.Nxi):
             plt.plot(t_pred[i], X_prediction[i], color="orange")
-        plt.xlabel(r'Time [s]')
-        plt.ylabel(r'Position [m]')
+        plt.xlabel(r'Time [min]')
+        plt.ylabel(r'Position [km]')
         plt.xlim(min(t), max(t))
         plt.ylim(min(x), max(x))
         plt.colorbar()
@@ -316,8 +317,8 @@ class ReconstructionNeuralNetwork():
         plt.pcolor(X, Y, np.abs(rho_prediction-rho), vmin=0.0, vmax=1.0, shading='auto', rasterized=True)
         for i in range(self.Nxi):
             plt.plot(t_pred[i], X_prediction[i], color="orange")
-        plt.xlabel(r'Time [s]')
-        plt.ylabel(r'Position [m]')
+        plt.xlabel(r'Time [min]')
+        plt.ylabel(r'Position [km]')
         plt.xlim(min(t), max(t))
         plt.ylim(min(x), max(x))
         plt.colorbar()

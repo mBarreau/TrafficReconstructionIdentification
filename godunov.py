@@ -18,7 +18,7 @@ def flux(Vf, greenshield=True):
         def f(rho):
             return Vf*rho*(1-rho)
     else: 
-        rhoc = 0.25
+        rhoc = 0.35
         def f(rho):
             return Vf*rho*(rho <= rhoc) + Vf*rhoc*(rho - 1)/(rhoc - 1)*(rho > rhoc)           
     return (f, rhoc)
@@ -97,8 +97,8 @@ class BoundaryConditions:
         self.maxZ0 = maxZ0
         self.sinePuls = sinePuls
         self.sim = sim
-        Tx = 500
-        Tt = 10
+        Tx = 0.3
+        Tt = 0.15
         
         if rhoBar == -1 and rhoSigma == 0:
             self.randomGaussian = False
@@ -204,7 +204,7 @@ class BoundaryConditions:
     
 class SimuGodunov:
 
-    def __init__(self, Vf, gamma, xiPos, xiT, zMin=0, zMax=1, L=5, Tmax=3, Nx = 300, rhoBar=-1, rhoSigma=0, greenshield=True):
+    def __init__(self, Vf, gamma, xiPos, xiT, zMin=0, zMax=1, L=5, Tmax=2, Nx = 300, rhoBar=-1, rhoSigma=0, greenshield=True):
         
         self.sim = PhysicsSim(L, Nx, Tmax, Vf, gamma, greenshield)
         
@@ -294,8 +294,8 @@ class SimuGodunov:
         fig = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(self.t, self.x)
         plt.pcolor(X, Y, z, shading='auto', vmin=0.0, vmax=1.0, rasterized=True)
-        plt.xlabel(r'Time [s]')
-        plt.ylabel(r'Position [m]')
+        plt.xlabel(r'Time [min]')
+        plt.ylabel(r'Position [km]')
         plt.xlim(0, self.sim.Tmax)
         plt.ylim(0, self.sim.L)
         plt.colorbar()
@@ -328,7 +328,7 @@ class SimuGodunov:
         -------
         x_selected : list of N numpy array of shape (?,1)
             space coordinate of the measurements.
-        t_selected : list of N numpy array f shape (?,1)
+        t_selected : list of N numpy array of shape (?,1)
             time coordinate of the measurements.
         rho_selected : list of N numpy array of shape (?,1)
             density measurements.

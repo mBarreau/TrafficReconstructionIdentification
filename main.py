@@ -16,17 +16,17 @@ from pyDOE import lhs
 ####     General parameters     #####
 #####################################
 
-Vf = 25 # Maximum car speed in m.s^-1
+Vf = 1.5 # Maximum car speed in km.min^-1
 gamma = 0 # dissipativity coefficient (0 by default, discrepencies may occur if very small and not zero)
-Tmax = 100 # simulation time
+Tmax = 1.4 # simulation time in min
 p = 1/15 # Probability that a car is a PV
-L = 5000 # Length of the road
-rhoBar = 0.2 # Average density of cars on the road
+L = 5 # Length of the road in km
+rhoBar = 0.4 # Average density of cars on the road
 rhoMax = 120 # Number of vehicles per kilometer
-rhoSigma = 0.6 # initial condition standard deviation
+rhoSigma = 0.25 # initial condition standard deviation
 noise = False # noise on the measurements and on the trajectories
 greenshield = False # Type of flux function used for the numerical simulation
-Ncar = rhoBar*rhoMax*L/1000 # Number of cars
+Ncar = rhoBar*rhoMax*L # Number of cars
 Npv = int(Ncar*p) # Number of PV
 
 # Initial position and time of probes vehicles
