@@ -21,7 +21,6 @@ class Sumo():
             reader = csv.reader(f)
             for row in reader:
                 data.append(row)
-        # data = np.array(data).astype(np.float)
         return data
 
     def process_probe_data(self, data):
@@ -60,7 +59,7 @@ class Sumo():
         return probe_t, probe_x, probe_u, probe_v
 
     def getMeasurements(self):
-        return self.probe_t, self.probe_t, self.probe_u, self.probe_v
+        return self.probe_t, self.probe_x, self.probe_u, self.probe_v
 
     def getDensity(self):
         return self.u

@@ -53,7 +53,7 @@ for n in range(Nt):
                if 0 <= i < Nx:
                    numberOfVehicles[i,n-NtStart] += 1
                    if traci.vehicle.getTypeID(vehID) == 'PV':
-                       PVList.update(vehID, n*deltaT, vehPos/1000, vehSpeed/3.6)        
+                       PVList.update(vehID, n*deltaT, vehPos/1000, vehSpeed*60/1000)        
    traci.simulationStep()
 print("step", n)
 traci.close()
