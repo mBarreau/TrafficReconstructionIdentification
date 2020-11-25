@@ -97,8 +97,8 @@ class BoundaryConditions:
         self.maxZ0 = maxZ0
         self.sinePuls = sinePuls
         self.sim = sim
-        Tx = 0.3
-        Tt = 0.15
+        Tx = 0.4
+        Tt = 0.20
         
         if rhoBar == -1 and rhoSigma == 0:
             self.randomGaussian = False
@@ -293,7 +293,8 @@ class SimuGodunov:
         
         fig = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(self.t, self.x)
-        plt.pcolor(X, Y, z, shading='auto', vmin=0.0, vmax=1.0, rasterized=True)
+        plt.pcolor(X, Y, z, shading='auto', vmin=0.0, vmax=1.0, cmap='rainbow',
+                   rasterized=True)
         plt.xlabel(r'Time [min]')
         plt.ylabel(r'Position [km]')
         plt.xlim(0, self.sim.Tmax)
@@ -301,7 +302,6 @@ class SimuGodunov:
         plt.colorbar()
         plt.tight_layout()
         self.pv.plot()
-        plt.show()
         fig.savefig('density.eps', bbox_inches='tight')
         
     def getMeasurements(self, selectedPacket=-1, totalPacket=-1, noise=False):
@@ -366,9 +366,9 @@ class SimuGodunov:
             toBeSelected = np.sort(toBeSelected) 
             
             if noise:
-                noise_trajectory = np.random.normal(0, 2, Nt)
+                noise_trajectory = np.random.normal(0, 1.5, Nt)/1000
                 noise_trajectory = np.cumsum(noise_trajectory.reshape(-1,), axis=0)
-                noise_meas = np.random.normal(0.01, 0.05, toBeSelected.shape[0]).reshape(-1,)
+                noise_meas = np.random.normal(0, 0.02, Nt).reshape(-1,)
             else:
                 noise_trajectory = np.array([0]*Nt)
                 noise_meas = np.array([0]*Nt)

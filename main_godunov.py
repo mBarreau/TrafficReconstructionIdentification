@@ -9,7 +9,6 @@ import numpy as np
 np.random.seed(12345)
 import godunov as g
 import reconstruction_neural_network as rn
-import matplotlib.pyplot as plt
 from pyDOE import lhs
 
 #####################################
@@ -18,13 +17,13 @@ from pyDOE import lhs
 
 Vf = 1.5 # Maximum car speed in km.min^-1
 gamma = 0 # dissipativity coefficient (0 by default, discrepencies may occur if very small and not zero)
-Tmax = 1.4 # simulation time in min
-p = 1/15 # Probability that a car is a PV
+Tmax = 2 # simulation time in min
+p = 1/20 # Probability that a car is a PV
 L = 5 # Length of the road in km
-rhoBar = 0.4 # Average density of cars on the road
+rhoBar = 0.5 # Average density of cars on the road
+rhoSigma = 0.45 # initial condition standard deviation
 rhoMax = 120 # Number of vehicles per kilometer
-rhoSigma = 0.25 # initial condition standard deviation
-noise = False # noise on the measurements and on the trajectories
+noise = True # noise on the measurements and on the trajectories
 greenshield = False # Type of flux function used for the numerical simulation
 Ncar = rhoBar*rhoMax*L # Number of cars
 Npv = int(Ncar*p) # Number of PV
@@ -50,7 +49,6 @@ trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_tr
 
 [_, _, figError] = trained_neural_network.plot(axisPlot, rho)
 simu_godunov.pv.plot()
-plt.show()
 figError.savefig('error.eps', bbox_inches='tight')
 
 

@@ -29,7 +29,7 @@ def amax(l):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, t, x, rho, v, L, Tmax, N_f=1000, N_g=100):
+    def __init__(self, t, x, rho, v, L, Tmax, N_f=1000, N_g=100, N_v=50):
         '''
         Initialize a neural network for density reconstruction
 
@@ -64,21 +64,24 @@ class ReconstructionNeuralNetwork():
         self.v = v
         self.t = t
         
-        num_hidden_layers = int(5*Tmax) 
-        num_nodes_per_layer = int(3*L) 
+        num_hidden_layers = min(int(4*Tmax), 10)
+        num_nodes_per_layer = int(5*L) 
         layers = [2] # There are two inputs: space and time
         for _ in range(num_hidden_layers):
             layers.append(num_nodes_per_layer)
         layers.append(1)
         
-        t_train, x_train, u_train, v_train, X_f_train, t_g_train = self.createTrainingDataset(t, x, rho, v, L, Tmax, N_f, N_g) # Creation of standardized training dataset
+        t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train = self.createTrainingDataset(t, x, rho, v, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
         
-        self.neural_network = NeuralNetwork(t_train, x_train, u_train, v_train, X_f_train, t_g_train, layers_density=layers, 
+        self.neural_network = NeuralNetwork(t_train, x_train, u_train, v_train, 
+                                            X_f_train, t_g_train, u_v_train,
+                                            layers_density=layers, 
                                             layers_trajectories=(1, 5, 5, 5, 5, 1), 
-                                            layers_speed=(1, 5, 5, 5, 1),) # Creation of the neural network
+                                            layers_speed=(1, 5, 5, 5, 1),
+                                            layers_acceleration=(1, 5, 5, 5, 5, 1)) # Creation of the neural network
         self.train() # Training of the neural network
             
-    def createTrainingDataset(self, t, x, rho, v, L, Tmax, N_f, N_g):       
+    def createTrainingDataset(self, t, x, rho, v, L, Tmax, N_f, N_g, N_v):       
         '''
         Standardize the dataset
 
@@ -134,8 +137,10 @@ class ReconstructionNeuralNetwork():
         t_g = []
         for i in range(self.Nxi):
             t_g.append(np.amin(t[i]) + lhs(1, samples=N_g)*(np.amax(t[i]) - np.amin(t[i])))
+            
+        u_v = lhs(1, samples=N_v)*2-1
         
-        return (t, x, rho, v, X_f, t_g)
+        return (t, x, rho, v, X_f, t_g, u_v)
 
     def train(self):
         '''
@@ -192,6 +197,29 @@ class ReconstructionNeuralNetwork():
         u = 2*rho-1
         
         return self.neural_network.predict_speed(u)*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
+    
+    def predict_dspeed(self, rho):
+        '''
+        Return the estimated acceleration at rho
+
+        Parameters
+        ----------
+        rho : numpy array (?, )
+            density.
+
+        Returns
+        -------
+        numpy array
+            estimated speed.
+
+        '''
+        
+        u = 2*rho-1
+        dSpeed, dSpeedEq = self.neural_network.predict_dspeed(u)
+        dSpeed = dSpeed*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
+        dSpeedEq = dSpeedEq*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
+        return dSpeed, dSpeedEq
+
     
     def predict_F(self, rho):
         '''
@@ -274,6 +302,8 @@ class ReconstructionNeuralNetwork():
         X_prediction = self.predict_trajectories(t_pred)
         rho_speed = np.linspace(0, 1).reshape(-1,1)
         v_prediction = self.predict_speed(rho_speed).reshape(-1,1)
+        (dv_prediction, dvEq) = self.predict_dspeed(rho_speed)
+        (dv_prediction, dvEq) = (dv_prediction.reshape(-1,1), dvEq.reshape(-1,1))
         F_prediction = self.predict_F(rho_speed).reshape(-1,1)
         
         figSpeed = plt.figure(figsize=(7.5, 5))
@@ -284,7 +314,8 @@ class ReconstructionNeuralNetwork():
         for i in range(self.Nxi):
             densityMeasurements = np.vstack((densityMeasurements, self.rho[i]))
             speedMeasurements = np.vstack((speedMeasurements, self.v[i]))
-        plt.scatter(densityMeasurements, speedMeasurements, rasterized=True, c='black', s=1, label=r'Data')
+        plt.scatter(densityMeasurements, speedMeasurements, rasterized=True, 
+                    c='black', s=1, label=r'Data')
         plt.xlabel(r'Normalized Density')
         plt.ylabel(r'Speed [km/min]')
         # plt.ylim(-v_prediction[0], v_prediction[0])
@@ -293,12 +324,24 @@ class ReconstructionNeuralNetwork():
         plt.legend()
         plt.tight_layout()
         # plt.title('Reconstruction')
-        plt.show()
+        figSpeed.savefig('speed.eps', bbox_inches='tight')
+        
+        figSpeed = plt.figure(figsize=(7.5, 5))
+        plt.plot(rho_speed, dv_prediction, rasterized=True, label=r'NN approximation of $dV$')
+        plt.plot(rho_speed, dvEq, rasterized=True, label=r'NN approximation of $dVNeg$')
+        plt.xlabel(r'Normalized Density')
+        plt.ylabel(r'Acceleration [km/min${}^2$]')
+        plt.xlim(0, 1)
+        plt.grid()
+        plt.legend()
+        plt.tight_layout()
+        # plt.title('Reconstruction')
         figSpeed.savefig('speed.eps', bbox_inches='tight')
 
         figReconstruction = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(t, x)
-        plt.pcolor(X, Y, rho_prediction, vmin=0.0, vmax=1.0, shading='auto', rasterized=True)
+        plt.pcolor(X, Y, rho_prediction, vmin=0.0, vmax=1.0, shading='auto', 
+                   cmap='rainbow', rasterized=True)
         for i in range(self.Nxi):
             plt.plot(t_pred[i], X_prediction[i], color="orange")
         plt.xlabel(r'Time [min]')
@@ -308,13 +351,12 @@ class ReconstructionNeuralNetwork():
         plt.colorbar()
         plt.tight_layout()
         # plt.title('Reconstruction')
-        plt.show()
         figReconstruction.savefig('reconstruction.eps', bbox_inches='tight')
-        
         
         figError = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(t, x)
-        plt.pcolor(X, Y, np.abs(rho_prediction-rho), vmin=0.0, vmax=1.0, shading='auto', rasterized=True)
+        plt.pcolor(X, Y, np.abs(rho_prediction-rho), vmin=0.0, vmax=1.0, 
+                   shading='auto', cmap='rainbow', rasterized=True)
         for i in range(self.Nxi):
             plt.plot(t_pred[i], X_prediction[i], color="orange")
         plt.xlabel(r'Time [min]')
@@ -324,7 +366,6 @@ class ReconstructionNeuralNetwork():
         plt.colorbar()
         plt.tight_layout()
         # plt.title('Absolute error')
-        plt.show()
         figError.savefig('error.eps', bbox_inches='tight') 
         
         return [figSpeed, figReconstruction, figError]

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 07/22/20 17:04:32 by Eclipse SUMO netedit Version 1.3.1
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <output>
+        <output-file value="H:\appdata\xp.V2\Documents\Sumo\highway\highway.net.xml"/>
+    </output>
+
+    <processing>
+        <offset.disable-normalization value="true"/>
+    </processing>
+
+    <junctions>
+        <no-turnarounds value="true"/>
+    </junctions>
+
+    <netedit>
+        <route-files value="H:\appdata\xp.V2\Documents\Sumo\highway\highway.rou.xml"/>
+    </netedit>
+
+</configuration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+
+    <route edges="gneE1 gneE2" id="route_0"/>
+    <route edges="gneE3 gneE2" id="route_1"/>
+	
+	<vType id="SUMO_DEFAULT_TYPE" accel="2.6" decel="4.5" sigma="1" length="3" minGap="1" maxSpeed="33.33" color="yellow"/>
+	<vType id="PV" accel="2.6" decel="4.5" sigma="1" length="3" minGap="1" maxSpeed="33.33" color="red"/>
+	
+	<flow id="initPV" type="PV" route="route_0" begin="0" end="0" departSpeed="speedLimit" number="3" departPos="random_free"/>
+	<flow id="init" type="SUMO_DEFAULT_TYPE" route="route_0" begin="0" end="0" departSpeed="speedLimit" number="50" departPos="random_free"/>
+	
+	<!-- <flow id="PVflow" type="PV" route="route_0" begin="1" period="70" end="10000" departSpeed="speedLimit"/> -->
+	<flow id="PVflow" type="PV" route="route_0" begin="1" probability="0.025" end="10000" departSpeed="speedLimit"/>
+	<flow id="perturbation1" type="SUMO_DEFAULT_TYPE" route="route_1" begin="1" period="20" end="400" departSpeed="speedLimit"/>
+	<flow id="def1" type="SUMO_DEFAULT_TYPE" route="route_0" begin="1" end="400" probability="0.6" departSpeed="speedLimit" />
+	<flow id="def2" type="SUMO_DEFAULT_TYPE" route="route_0" begin="390" end="10000" probability="0.26" departSpeed="speedLimit" />
+	
+</routes>

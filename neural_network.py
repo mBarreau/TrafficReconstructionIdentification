@@ -18,8 +18,9 @@ import numpy as np
 
 class NeuralNetwork():
 
-    def __init__(self, t, x, u, v, X_f, t_g, layers_density, layers_trajectories, layers_speed,
-                 init_density=[[], []], init_trajectories=[[[], []], [[], []]], init_speed=[[], []]):
+    def __init__(self, t, x, u, v, X_f, t_g, u_v,
+                 layers_density, layers_trajectories, layers_speed, layers_acceleration,
+                 init_density=[[], []], init_trajectories=[[], []], init_speed=[[], []]):
      
         '''
         Initialize a neural network for regression purposes.
@@ -38,6 +39,8 @@ class NeuralNetwork():
             standardized (space, time) coordinate of F physics training points.
         t_g : 1D numpy array of shape (N_G, 1)
             standardized time coordinate of G physics training points.
+        u_v : 1D numpy array of shape (N_v, 1)
+            standardized u coordinate of dV physics training points.
         layers_density : list of int (size N_L)
             List of integers corresponding to the number of neurons in each
             for the neural network Theta.
@@ -50,9 +53,12 @@ class NeuralNetwork():
         init_density : list of two lists, optional
             Initial values for the weight and biases of Theta. 
             The default is [[], []].
-        init_trajectories : nested list, optional
+        init_trajectories : list of two lists, optional
             Initial values for the weight and biases of Phi. 
-            The default is [[[], []], [[], []]].
+            The default is [[], []].
+        init_speed : list of two lists, optional
+            Initial values for the weight and biases of V. 
+            The default is [[], []].
 
         Returns
         -------
@@ -68,6 +74,7 @@ class NeuralNetwork():
         self.x_f = X_f[:, 0:1]
         self.t_f = X_f[:, 1:2]
         self.t_g = t_g
+        self.u_v = u_v
         
         self.N = len(self.x) # Number of agents
 
@@ -89,30 +96,18 @@ class NeuralNetwork():
         # Phi neural network
         self.weights_trajectories = []
         self.biases_trajectories = []
-        self.weights_trajectories_relu = []
-        self.biases_trajectories_relu = []
-        self.weight_tanh = []
-        self.weight_relu = []
         for i in range(self.N):
             weights_trajectories, biases_trajectories = self.initialize_neural_network(layers_trajectories, 
-                                                                                                 initWeights=init_trajectories[0][0], 
-                                                                                                 initBias=init_trajectories[0][1], 
+                                                                                                 initWeights=init_trajectories[0], 
+                                                                                                 initBias=init_trajectories[1], 
                                                                                                  act="tanh")
             self.weights_trajectories.append(weights_trajectories)
             self.biases_trajectories.append(biases_trajectories)
-            
-            # weights_trajectories_relu, biases_trajectories_relu = self.initialize_neural_network(layers_trajectories, 
-            #                                                                                                initWeights=init_trajectories[1][0], 
-            #                                                                                                initBias=init_trajectories[1][1], 
-            #                                                                                                act="relu")
-            # self.weights_trajectories_relu.append(weights_trajectories_relu)
-            # self.biases_trajectories_relu.append(biases_trajectories_relu)
-            # 
-            # self.weight_tanh.append(tf.Variable(1, dtype=tf.float32, trainable=False)) # init_trajectories[-2]
-            # self.weight_relu.append(tf.Variable(0, dtype=tf.float32, trainable=False)) # init_trajectories[-1]
-            
+                        
         # V neural network
         self.weights_speed, self.biases_speed = self.initialize_neural_network(layers_speed, init_speed[0], init_speed[1], act="tanh")
+        self.weights_dspeed, self.biases_dspeed = self.initialize_neural_network(layers_acceleration, act="tanh")
+        list_var_speed = self.weights_speed + self.biases_speed + self.weights_dspeed + self.biases_dspeed
         
         # Start a TF session
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -124,6 +119,7 @@ class NeuralNetwork():
         self.v_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
         self.x_f_tf = tf.placeholder(tf.float32, shape=[None, self.x_f.shape[1]])
         self.t_f_tf = tf.placeholder(tf.float32, shape=[None, self.t_f.shape[1]])
+        self.u_v_tf = tf.placeholder(tf.float32, shape=[None, self.u_v.shape[1]])
         
         self.u_pred = [self.net_u(self.t_tf[i], self.net_x_pv(self.t_tf[i], i)) for i in range(self.N)] 
         self.f_pred = self.net_f(self.t_f_tf, self.x_f_tf)        
@@ -153,28 +149,29 @@ class NeuralNetwork():
         for i in range(self.N):
             self.MSEv1 = self.MSEv1 + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.u_tf[i] - self.noise_rho_bar[i] )))
             self.MSEv2 = self.MSEv1 + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.net_u(self.t_tf[i], self.x_tf[i]))))
+        self.MSEv = tf.reduce_mean(tf.square(self.net_dv(self.u_v_tf) - self.net_dvNeg(self.u_v_tf)))
         
-        self.loss_normal = self.MSEtrajectories + self.MSEu1 + self.MSEv1
+        self.loss_normal = self.MSEtrajectories + self.MSEu1 + self.MSEv1 + self.MSEv
         self.loss_rough = 0.5*self.loss_normal +  0.5*(self.MSEu2 + self.MSEv2) + 0.5*(self.MSEg + self.MSEf)
-        self.loss_precise = 0.1*self.loss_normal +  0.8*(self.MSEu2 + self.MSEv2) + 1*(self.MSEg + self.MSEf) + 0.1*tf.square(self.gamma_var)
+        self.loss_precise = 0.3*self.loss_normal +  0.7*(self.MSEu2 + self.MSEv2) + 0.7*(self.MSEg + self.MSEf) + 0.1*tf.square(self.gamma_var)
         
         # Definition of the training procedure
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss_normal, 100, {'maxiter': 500,
-                                                                          'maxfun': 500,
-                                                                          'maxcor': 50,
-                                                                          'maxls': 50,
+        self.optimizer.append(OptimizationProcedure(self, self.loss_normal, 100, {'maxiter': 1000,
+                                                                          'maxfun': 1000,
+                                                                          'maxcor': 20,
+                                                                          'maxls': 10,
                                                                           'ftol': 5.0 * np.finfo(float).eps}))
         self.optimizer.append(OptimizationProcedure(self, self.loss_rough, 200, {'maxiter': 1000,
                                                                           'maxfun': 1000,
                                                                           'maxcor': 50,
                                                                           'maxls': 20,
                                                                           'ftol': 5.0 * np.finfo(float).eps}, 
-                                                    var_list=list_var_density+self.weights_speed+self.biases_speed))
+                                                    var_list=list_var_density + list_var_speed))
         self.optimizer.append(OptimizationProcedure(self, self.loss_precise, 0, {'maxiter': 10000,
                                                                           'maxfun': 10000,
-                                                                          'maxcor': 100,
-                                                                          'maxls': 50,
+                                                                          'maxcor': 75,
+                                                                          'maxls': 40,
                                                                           'ftol': 1.0 * np.finfo(float).eps}))
 
         # Initialize the TF session
@@ -312,6 +309,42 @@ class NeuralNetwork():
         return tf.square(self.neural_network(u, self.weights_speed, 
                                 self.biases_speed, act=tf.nn.tanh))*(1-u)
     
+    def net_dv(self, u):
+        '''
+        Standardized acceleration
+
+        Parameters
+        ----------
+        u : float32
+            Standardized density.
+
+        Returns
+        -------
+        TYPE
+            Standardized acceleration.
+
+        '''
+        v = self.net_v(u)
+        return tf.gradients(v, u)[0]
+    
+    def net_dvNeg(self, u):
+        '''
+        Positive estimation of the standardized acceleration
+
+        Parameters
+        ----------
+        u : float32
+            Standardized density.
+
+        Returns
+        -------
+        TYPE
+            Positive estimation of the standardized acceleration.
+
+        '''
+        return -tf.square(self.neural_network(u, self.weights_dspeed, 
+                                self.biases_dspeed, act=tf.nn.tanh))
+    
     def net_F(self, u):
         '''
         Characteristic speed
@@ -394,10 +427,6 @@ class NeuralNetwork():
         '''
         x_tanh = self.neural_network(t, self.weights_trajectories[i], 
                                     self.biases_trajectories[i], act=tf.nn.tanh)
-        # x_relu = self.neural_network(t, self.weights_trajectories_relu[i], 
-        #                                          self.biases_trajectories_relu[i],
-        #                                          act=tf.nn.relu)
-        # return self.weight_tanh[i]*x_tanh + self.weight_relu[i]*x_relu
         return x_tanh
     
     def net_x(self, t):
@@ -441,11 +470,11 @@ class NeuralNetwork():
             g.append(x_t - self.net_v(u))
         return g
 
-    def loss_callback(self, MSEu1, MSEu2, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, total_loss, gamma):
+    def loss_callback(self, MSEu1, MSEu2, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, MSEv, total_loss, gamma):
         
         if self.epoch%10 == 1:
-            print('Epoch: %.0f | MSEu1: %.5e | MSEu2: %.5e | MSEf: %.5e | MSEtrajectories: %.5e | MSEg: %.5e | MSEv1: %.5e | MSEv2: %.5e | Gamma: %.5e | Total: %.5e' %
-                  (self.epoch, MSEu1, MSEu2, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, gamma**2, total_loss))
+            print('Epoch: %.0f | MSEu1: %.5e | MSEu2: %.5e | MSEf: %.5e | MSEtrajectories: %.5e | MSEg: %.5e | MSEv1: %.5e | MSEv2: %.5e | MSEv: %.5e | Gamma: %.5e | Total: %.5e' %
+                  (self.epoch, MSEu1, MSEu2, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, MSEv, gamma**2, total_loss))
             
         self.epoch += 1
 
@@ -478,6 +507,7 @@ class NeuralNetwork():
             
         tf_dict[self.t_f_tf] = self.t_f
         tf_dict[self.x_f_tf] = self.x_f
+        tf_dict[self.u_v_tf] = self.u_v
         
         for i in range(len(self.optimizer)):
             print('---> STEP %.0f' % (i+1))
@@ -523,6 +553,25 @@ class NeuralNetwork():
         '''
         u = np.float32(u)
         return self.sess.run(self.net_v(u))
+    
+    def predict_dspeed(self, u):
+        '''
+        Return the standardized estimated speed at u
+
+        Parameters
+        ----------
+        u : numpy array (?, )
+            standardized density.
+
+        Returns
+        -------
+        numpy array
+            standardized estimated speed.
+
+        '''
+        u = np.float32(u)
+        u_tf = tf.placeholder(tf.float32, shape=[None, 1])
+        return (self.sess.run(self.net_dv(u_tf), feed_dict={u_tf: u}), self.sess.run(self.net_dvNeg(u)))
     
     def predict_F(self, u):
         '''
@@ -588,6 +637,7 @@ class OptimizationProcedure():
                                 mother.sess.run(mother.MSEg, tf_dict), 
                                 mother.sess.run(mother.MSEv1, tf_dict), 
                                 mother.sess.run(mother.MSEv2, tf_dict), 
+                                mother.sess.run(mother.MSEv, tf_dict), 
                                 mother.sess.run(self.loss, tf_dict), 
                                 mother.sess.run(mother.gamma_var))
             mother.sess.run(self.optimizer_adam, tf_dict)
@@ -598,6 +648,7 @@ class OptimizationProcedure():
                              mother.sess.run(mother.MSEg, tf_dict), 
                              mother.sess.run(mother.MSEv1, tf_dict), 
                              mother.sess.run(mother.MSEv2, tf_dict), 
+                             mother.sess.run(mother.MSEv, tf_dict), 
                              mother.sess.run(self.loss, tf_dict), 
                              mother.sess.run(mother.gamma_var))
             
@@ -605,6 +656,6 @@ class OptimizationProcedure():
         self.optimizer_BFGS.minimize(mother.sess,
                                 feed_dict=tf_dict,
                                 fetches=[mother.MSEu1, mother.MSEu2, mother.MSEf, mother.MSEtrajectories, 
-                                         mother.MSEg, mother.MSEv1, mother.MSEv2, 
+                                         mother.MSEg, mother.MSEv1, mother.MSEv2, mother.MSEv,
                                          self.loss, mother.gamma_var],
                                 loss_callback=mother.loss_callback)
