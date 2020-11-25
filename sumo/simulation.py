@@ -26,7 +26,7 @@ scenario = "highway"
 traci.start(["sumo", "-c", scenario+"/"+scenario+".sumocfg"])
 
 deltaX = 0.010 # in km, more than a vehicle
-L = 3 # in km
+L = 2.5 # in km
 deltaT = traci.simulation.getDeltaT()/60 # in min
 Tmax = 11 # in min
 Tstart = 8 # in min
@@ -48,6 +48,7 @@ for n in range(Nt):
        for vehID in traci.vehicle.getIDList():
            if traci.vehicle.getRouteID(vehID) == 'route_0' or traci.vehicle.getRouteID(vehID) == 'route_1':
                vehPos = traci.vehicle.getPosition(vehID)[0]
+               if vehPos >= L*1000: continue
                vehSpeed = traci.vehicle.getSpeed(vehID)
                i = int(np.floor(vehPos/(1000*deltaX)))
                if 0 <= i < Nx:

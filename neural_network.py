@@ -121,7 +121,8 @@ class NeuralNetwork():
         self.t_f_tf = tf.placeholder(tf.float32, shape=[None, self.t_f.shape[1]])
         self.u_v_tf = tf.placeholder(tf.float32, shape=[None, self.u_v.shape[1]])
         
-        self.u_pred = [self.net_u(self.t_tf[i], self.net_x_pv(self.t_tf[i], i)) for i in range(self.N)] 
+        self.u_pred = [self.net_u(self.t_tf[i], self.net_x_pv(self.t_tf[i], i)) - self.noise_rho_bar[i]
+                       for i in range(self.N)] 
         self.f_pred = self.net_f(self.t_f_tf, self.x_f_tf)        
         
         # Agents part
@@ -131,24 +132,19 @@ class NeuralNetwork():
         self.g_pred = self.net_g(self.t_g_tf)
 
         # MSE part
-        self.MSEu1 = 0
-        self.MSEu2 = 0
-        for i in range(self.N):
-            self.MSEu1 = self.MSEu1 + tf.reduce_mean(tf.square(self.u_tf[i] - self.net_u(self.t_tf[i], self.x_tf[i])))/self.N
-            self.MSEu2 = self.MSEu2 + tf.reduce_mean(tf.square(self.u_tf[i] - self.u_pred[i] - self.noise_rho_bar[i]))/self.N
+        self.MSEu1 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0) 
+                                              - self.net_u(tf.concat(self.t_tf, 0),
+                                                          tf.concat(self.x_tf, 0))))
+        self.MSEu2 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0)
+                                              - tf.concat(self.u_pred, 0)))
         self.MSEf = tf.reduce_mean(tf.square(self.f_pred))
         
-        self.MSEtrajectories = 0
-        self.MSEg = 0
-        for i in range(self.N):
-            self.MSEtrajectories = self.MSEtrajectories + tf.reduce_mean(tf.square(self.x_tf[i] - self.x_pred[i]))/self.N
-            self.MSEg = self.MSEg + tf.reduce_mean(tf.square(self.g_pred[i]))/self.N
+        self.MSEtrajectories = tf.reduce_mean(tf.square(tf.concat(self.x_tf, 0)
+                                                        - tf.concat(self.x_pred, 0)))
+        self.MSEg = tf.reduce_mean(tf.square(tf.concat(self.g_pred, 0)))
             
-        self.MSEv1 = 0
-        self.MSEv2 = 0
-        for i in range(self.N):
-            self.MSEv1 = self.MSEv1 + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.u_tf[i] - self.noise_rho_bar[i] )))
-            self.MSEv2 = self.MSEv1 + tf.reduce_mean(tf.square(self.v_tf[i] - self.net_v(self.net_u(self.t_tf[i], self.x_tf[i]))))
+        self.MSEv1 = tf.reduce_mean(tf.square(tf.concat(self.v_tf, 0) - self.net_v(tf.concat(self.u_tf, 0))))
+        self.MSEv2 = tf.reduce_mean(tf.square(tf.concat(self.v_tf, 0) - self.net_v(tf.concat(self.u_pred, 0))))
         self.MSEv = tf.reduce_mean(tf.square(self.net_dv(self.u_v_tf) - self.net_dvNeg(self.u_v_tf)))
         
         self.loss_normal = self.MSEtrajectories + self.MSEu1 + self.MSEv1 + self.MSEv
@@ -159,8 +155,8 @@ class NeuralNetwork():
         self.optimizer = []
         self.optimizer.append(OptimizationProcedure(self, self.loss_normal, 100, {'maxiter': 1000,
                                                                           'maxfun': 1000,
-                                                                          'maxcor': 20,
-                                                                          'maxls': 10,
+                                                                          'maxcor': 40,
+                                                                          'maxls': 20,
                                                                           'ftol': 5.0 * np.finfo(float).eps}))
         self.optimizer.append(OptimizationProcedure(self, self.loss_rough, 200, {'maxiter': 1000,
                                                                           'maxfun': 1000,
@@ -193,7 +189,7 @@ class NeuralNetwork():
             List of matrices corresponding to the initial biases in each layer. 
             The default is [].
         act : string, optional
-            Activation function. Can be anh or relu. The default is "tanh".
+            Activation function. Can be tanh or relu. The default is "tanh".
 
         Returns
         -------
