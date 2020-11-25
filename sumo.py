@@ -71,7 +71,8 @@ class Sumo():
 
     def plotDensity(self):
         fig = plt.figure('density_true', figsize=(7.5, 5))
-        plt.imshow(np.flipud(self.u), extent=[0, self.Tmax, 0, self.L], cmap='rainbow', vmin=0.0, vmax=1, aspect='auto')
+        plt.imshow(np.flipud(self.u), extent=[0, self.Tmax, 0, self.L], 
+                   cmap='rainbow', vmin=0.0, vmax=1, aspect='auto')
         plt.colorbar()
         for (t,x) in zip(self.probe_t, self.probe_x):
             plt.scatter(t, x, s=1, c='k')

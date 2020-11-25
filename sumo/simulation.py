@@ -28,7 +28,7 @@ traci.start(["sumo", "-c", scenario+"/"+scenario+".sumocfg"])
 deltaX = 0.010 # in km, more than a vehicle
 L = 2.5 # in km
 deltaT = traci.simulation.getDeltaT()/60 # in min
-Tmax = 11 # in min
+Tmax = 25 # in min
 Tstart = 8 # in min
 sigma = 0.01 # in km
 tau = 0.06 # in min
@@ -117,7 +117,7 @@ for pv in PVList.pvs:
         j = int(pv.t[k]/deltaT)
         i = int(pv.x[k]/deltaX)
         rhoPV.append(density[i,j-NtStart])
-plt.scatter(tVarPlot, xVar, color='red', s=0.4)
+plt.scatter(tVarPlot, xVar, color='k', s=0.4)
 
 with open(scenario+'/spaciotemporal.csv', 'w', newline='') as file:
     writer = csv.writer(file)

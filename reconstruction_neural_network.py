@@ -315,7 +315,7 @@ class ReconstructionNeuralNetwork():
             densityMeasurements = np.vstack((densityMeasurements, self.rho[i]))
             speedMeasurements = np.vstack((speedMeasurements, self.v[i]))
         plt.scatter(densityMeasurements, speedMeasurements, rasterized=True, 
-                    c='black', s=1, label=r'Data')
+                    c='k', s=1, label=r'Data')
         plt.xlabel(r'Normalized Density')
         plt.ylabel(r'Speed [km/min]')
         # plt.ylim(-v_prediction[0], v_prediction[0])
@@ -343,7 +343,7 @@ class ReconstructionNeuralNetwork():
         plt.pcolor(X, Y, rho_prediction, vmin=0.0, vmax=1.0, shading='auto', 
                    cmap='rainbow', rasterized=True)
         for i in range(self.Nxi):
-            plt.plot(t_pred[i], X_prediction[i], color="orange")
+            plt.plot(t_pred[i], X_prediction[i], color="gray")
         plt.xlabel(r'Time [min]')
         plt.ylabel(r'Position [km]')
         plt.xlim(min(t), max(t))
@@ -358,7 +358,7 @@ class ReconstructionNeuralNetwork():
         plt.pcolor(X, Y, np.abs(rho_prediction-rho), vmin=0.0, vmax=1.0, 
                    shading='auto', cmap='rainbow', rasterized=True)
         for i in range(self.Nxi):
-            plt.plot(t_pred[i], X_prediction[i], color="orange")
+            plt.plot(t_pred[i], X_prediction[i], color="gray")
         plt.xlabel(r'Time [min]')
         plt.ylabel(r'Position [km]')
         plt.xlim(min(t), max(t))

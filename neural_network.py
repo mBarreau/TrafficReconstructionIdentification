@@ -148,8 +148,8 @@ class NeuralNetwork():
         self.MSEv = tf.reduce_mean(tf.square(self.net_dv(self.u_v_tf) - self.net_dvNeg(self.u_v_tf)))
         
         self.loss_normal = self.MSEtrajectories + self.MSEu1 + self.MSEv1 + self.MSEv
-        self.loss_rough = 0.5*self.loss_normal +  0.5*(self.MSEu2 + self.MSEv2) + 0.5*(self.MSEg + self.MSEf)
-        self.loss_precise = 0.3*self.loss_normal +  0.7*(self.MSEu2 + self.MSEv2) + 0.7*(self.MSEg + self.MSEf) + 0.1*tf.square(self.gamma_var)
+        self.loss_rough = 0.7*self.loss_normal + 0.3*(self.MSEu2 + self.MSEv2) + 0.5*(self.MSEg + self.MSEf)
+        self.loss_precise = 0.5*self.loss_normal + 0.5*(self.MSEu2 + self.MSEv2) + 0.7*(self.MSEg + self.MSEf) + 0.1*tf.square(self.gamma_var)
         
         # Definition of the training procedure
         self.optimizer = []
