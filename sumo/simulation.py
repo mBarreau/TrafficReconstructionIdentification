@@ -28,7 +28,7 @@ traci.start(["sumo", "-c", scenario+"/"+scenario+".sumocfg"])
 deltaX = 0.010 # in km, more than a vehicle
 L = 2.5 # in km
 deltaT = traci.simulation.getDeltaT()/60 # in min
-Tmax = 25 # in min
+Tmax = 15 # in min
 Tstart = 8 # in min
 sigma = 0.01 # in km
 tau = 0.06 # in min

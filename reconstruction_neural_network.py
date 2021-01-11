@@ -64,19 +64,26 @@ class ReconstructionNeuralNetwork():
         self.v = v
         self.t = t
         
-        num_hidden_layers = min(int(4*Tmax), 10)
+        num_hidden_layers = min(max(int(4*Tmax), 5), 10)
         num_nodes_per_layer = int(5*L) 
-        layers = [2] # There are two inputs: space and time
+        layers_density = [2] # There are two inputs: space and time
         for _ in range(num_hidden_layers):
-            layers.append(num_nodes_per_layer)
-        layers.append(1)
+            layers_density.append(num_nodes_per_layer)
+        layers_density.append(1)
+        
+        num_hidden_layers = min(max(int(3*L), 4), 15)
+        num_nodes_per_layer = 10
+        layers_trajectories = [1] # There are two inputs: space and time
+        for _ in range(num_hidden_layers):
+            layers_trajectories.append(num_nodes_per_layer)
+        layers_trajectories.append(1)
         
         t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train = self.createTrainingDataset(t, x, rho, v, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
         
         self.neural_network = NeuralNetwork(t_train, x_train, u_train, v_train, 
                                             X_f_train, t_g_train, u_v_train,
-                                            layers_density=layers, 
-                                            layers_trajectories=(1, 5, 5, 5, 5, 1), 
+                                            layers_density=layers_density, 
+                                            layers_trajectories=layers_trajectories, 
                                             layers_speed=(1, 5, 5, 5, 1),
                                             layers_acceleration=(1, 5, 5, 5, 5, 1)) # Creation of the neural network
         self.train() # Training of the neural network
@@ -117,7 +124,7 @@ class ReconstructionNeuralNetwork():
         X_f : 2D array of shape (N_f, 2)
             Standardized location of physical points for f.
         t_g : list of float64
-            List of standardized phisical points for g.
+            List of standardized physical points for g.
 
         '''
         
@@ -136,9 +143,12 @@ class ReconstructionNeuralNetwork():
         
         t_g = []
         for i in range(self.Nxi):
-            t_g.append(np.amin(t[i]) + lhs(1, samples=N_g)*(np.amax(t[i]) - np.amin(t[i])))
+            tgi = np.amin(t[i]) + lhs(1, samples=N_g)*(np.amax(t[i]) - np.amin(t[i]))
+            np.random.shuffle(tgi)
+            t_g.append(tgi)
             
         u_v = lhs(1, samples=N_v)*2-1
+        np.random.shuffle(u_v)
         
         return (t, x, rho, v, X_f, t_g, u_v)
 
@@ -247,7 +257,7 @@ class ReconstructionNeuralNetwork():
 
         Parameters
         ----------
-        t : list of N numpy arrays of size (?, )
+        t : list of N numpy arrays of size (?, 1)
             time coordinate.
 
         Returns
@@ -343,7 +353,7 @@ class ReconstructionNeuralNetwork():
         plt.pcolor(X, Y, rho_prediction, vmin=0.0, vmax=1.0, shading='auto', 
                    cmap='rainbow', rasterized=True)
         for i in range(self.Nxi):
-            plt.plot(t_pred[i], X_prediction[i], color="gray")
+            plt.plot(t_pred[i], X_prediction[i], color="saddlebrown")
         plt.xlabel(r'Time [min]')
         plt.ylabel(r'Position [km]')
         plt.xlim(min(t), max(t))
@@ -358,7 +368,7 @@ class ReconstructionNeuralNetwork():
         plt.pcolor(X, Y, np.abs(rho_prediction-rho), vmin=0.0, vmax=1.0, 
                    shading='auto', cmap='rainbow', rasterized=True)
         for i in range(self.Nxi):
-            plt.plot(t_pred[i], X_prediction[i], color="gray")
+            plt.plot(t_pred[i], X_prediction[i], color="saddlebrown")
         plt.xlabel(r'Time [min]')
         plt.ylabel(r'Position [km]')
         plt.xlim(min(t), max(t))

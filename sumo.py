@@ -75,7 +75,7 @@ class Sumo():
                    cmap='rainbow', vmin=0.0, vmax=1, aspect='auto')
         plt.colorbar()
         for (t,x) in zip(self.probe_t, self.probe_x):
-            plt.scatter(t, x, s=1, c='k')
+            plt.plot(t, x, c='k')
         # plt.title('Density')
         plt.xlabel(r'Time [min]')
         plt.ylabel(r'Position [km]')
@@ -86,4 +86,4 @@ class Sumo():
 
     def plotProbeVehicles(self):
         for (t,x) in zip(self.probe_t, self.probe_x):
-            plt.scatter(t, x, s=1, c='k')
+            plt.plot(t, x, c='k')

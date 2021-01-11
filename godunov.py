@@ -18,7 +18,7 @@ def flux(Vf, greenshield=True):
         def f(rho):
             return Vf*rho*(1-rho)
     else: 
-        rhoc = 0.35
+        rhoc = 0.4
         def f(rho):
             return Vf*rho*(rho <= rhoc) + Vf*rhoc*(rho - 1)/(rhoc - 1)*(rho > rhoc)           
     return (f, rhoc)
@@ -87,7 +87,7 @@ class ProbeVehicles:
     
     def plot(self):
         for j in range(self.Nxi):
-            plt.plot(self.xiTArray[j], self.xiArray[j], color='red')
+            plt.plot(self.xiTArray[j], self.xiArray[j], c='k')
         
 
 class BoundaryConditions:
