@@ -29,7 +29,7 @@ def amax(l):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, t, x, rho, v, L, Tmax, N_f=1000, N_g=100, N_v=50):
+    def __init__(self, t, x, rho, v, v_max, L, Tmax, N_f=1000, N_g=100, N_v=50):
         '''
         Initialize a neural network for density reconstruction
 
@@ -69,26 +69,26 @@ class ReconstructionNeuralNetwork():
         layers_density = [2] # There are two inputs: space and time
         for _ in range(num_hidden_layers):
             layers_density.append(num_nodes_per_layer)
-        layers_density.append(1)
+        layers_density.append(1)  
         
         num_hidden_layers = min(max(int(3*L), 4), 15)
         num_nodes_per_layer = 10
         layers_trajectories = [1] # There are two inputs: space and time
-        for _ in range(num_hidden_layers):
-            layers_trajectories.append(num_nodes_per_layer)
+        # for _ in range(num_hidden_layers):
+        #     layers_trajectories.append(num_nodes_per_layer)
         layers_trajectories.append(1)
         
-        t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train = self.createTrainingDataset(t, x, rho, v, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
+        t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train, v_max = self.createTrainingDataset(t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
         
         self.neural_network = NeuralNetwork(t_train, x_train, u_train, v_train, 
-                                            X_f_train, t_g_train, u_v_train,
+                                            X_f_train, t_g_train, u_v_train, v_max,
                                             layers_density=layers_density, 
                                             layers_trajectories=layers_trajectories, 
                                             layers_speed=(1, 5, 5, 5, 1),
-                                            layers_acceleration=(1, 5, 5, 5, 5, 1)) # Creation of the neural network
+                                            layers_acceleration=(1, 1)) # Creation of the neural network
         self.train() # Training of the neural network
             
-    def createTrainingDataset(self, t, x, rho, v, L, Tmax, N_f, N_g, N_v):       
+    def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
         '''
         Standardize the dataset
 
@@ -136,6 +136,7 @@ class ReconstructionNeuralNetwork():
         t = [2*(t_temp - self.lb[1])/(self.ub[1] - self.lb[1]) - 1 for t_temp in t]
         rho = [2*rho_temp-1 for rho_temp in rho]
         v = [v_temp*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) for v_temp in v]
+        v_max = v_max*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0])
         
         X_f = np.array([2, 2])*lhs(2, samples=N_f)
         X_f = X_f - np.ones(X_f.shape)
@@ -150,7 +151,7 @@ class ReconstructionNeuralNetwork():
         u_v = lhs(1, samples=N_v)*2-1
         np.random.shuffle(u_v)
         
-        return (t, x, rho, v, X_f, t_g, u_v)
+        return (t, x, rho, v, X_f, t_g, u_v, v_max)
 
     def train(self):
         '''

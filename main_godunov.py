@@ -16,7 +16,7 @@ from pyDOE import lhs
 #####################################
 
 Vf = 1.5 # Maximum car speed in km.min^-1
-gamma = 0 # dissipativity coefficient (0 by default, discrepencies may occur if very small and not zero)
+gamma = 0 # dissipativity coefficient (0 by default, discrepencies may occur if very small but not zero)
 Tmax = 2 # simulation time in min
 p = 1/20 # Probability that a car is a PV
 L = 5 # Length of the road in km
@@ -24,7 +24,7 @@ rhoBar = 0.5 # Average density of cars on the road
 rhoSigma = 0.45 # initial condition standard deviation
 rhoMax = 120 # Number of vehicles per kilometer
 noise = True # noise on the measurements and on the trajectories
-greenshield = False # Type of flux function used for the numerical simulation
+greenshield = True # Type of flux function used for the numerical simulation
 Ncar = rhoBar*rhoMax*L # Number of cars
 Npv = int(Ncar*p) # Number of PV
 
@@ -35,7 +35,7 @@ xiT = np.array([0]*Npv)
 
 # Godunov simulation of the PDE
 simu_godunov = g.SimuGodunov(Vf, gamma, xiPos, xiT, L=L, Tmax=Tmax,
-                             zMin=0, zMax=1, Nx=1000, greenshield=greenshield,
+                             zMin=0, zMax=1, Nx=700, greenshield=greenshield,
                              rhoBar=rhoBar, rhoSigma=rhoSigma)
 rho = simu_godunov.simulation()
 simu_godunov.plot()
@@ -44,11 +44,9 @@ axisPlot = simu_godunov.getAxisPlot()
 # collect data from PV
 t_train, x_train, rho_train, v_train = simu_godunov.getMeasurements(selectedPacket=-1, totalPacket=-1, noise=noise)
 
-trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
-                                                    L, Tmax, N_f=3000, N_g=100)
+trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train, Vf,
+                                                    L, Tmax, N_f=1000, N_g=100)
 
 [_, _, figError] = trained_neural_network.plot(axisPlot, rho)
 simu_godunov.pv.plot()
 figError.savefig('error.eps', bbox_inches='tight')
-
-
