@@ -760,20 +760,15 @@ class OptimizationProcedure():
                 lambdas_res = mother.sess.run(mother.lambdas_res, tf_dict)
                 lambdas_meas = mother.sess.run(mother.lambdas_meas, tf_dict)
                 # lambdaMean = np.mean(lambdaArray, axis=1)
-                new_lambdas_res = []
-                new_lambdas_meas = []
+
                 for i in range(len(lambdas_res)):
                     if 0 < lambdas_res[i] < np.inf:
-                        new_lambdas_res.append(mother.beta*lambdas_res[i] + (1-mother.beta)*tf_dict[mother.lambdas_res_tf[i]])
-                    else:
-                        new_lambdas_res.append(tf_dict[mother.lambdas_res_tf[i]])
+                        new_lambdas_res = mother.beta*lambdas_res[i] + (1-mother.beta)*tf_dict[mother.lambdas_res_tf[i]]
+                        tf_dict[mother.lambdas_res_tf[i]] = new_lambdas_res
                     if 0 < lambdas_meas[i] < np.inf:
-                        new_lambdas_meas.append(mother.beta*lambdas_meas[i] + (1-mother.beta)*tf_dict[mother.lambdas_meas_tf[i]])
-                    else:
-                        new_lambdas_meas.append(tf_dict[mother.lambdas_meas_tf[i]])
-                        
-                    tf_dict[mother.lambdas_res_tf[i]] = new_lambdas_res[i]
-                    tf_dict[mother.lambdas_meas_tf[i]] = new_lambdas_meas[i]
+                        new_lambdas_meas = mother.beta*lambdas_meas[i] + (1-mother.beta)*tf_dict[mother.lambdas_meas_tf[i]]
+                        tf_dict[mother.lambdas_meas_tf[i]] = new_lambdas_meas
+
                 print(tf_dict[mother.lambdas_res_tf[0]], 
                   tf_dict[mother.lambdas_res_tf[1]], 
                   tf_dict[mother.lambdas_meas_tf[0]], 
