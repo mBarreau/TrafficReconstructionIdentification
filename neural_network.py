@@ -219,24 +219,32 @@ class NeuralNetwork():
         loss_meas = np.array([self.MSEv1, self.MSEu1])
         loss_res = np.array([self.MSEv, self.MSEf])
         index = ['speed', 'density']
-        self.lambdas = np.array([tf.placeholder(tf.float32, shape=()) for _ in range(len(index))])
+        self.lambdas_res_tf = np.array([tf.placeholder(tf.float32, shape=()) for _ in range(len(index))])
+        self.lambdas_meas_tf = np.array([tf.placeholder(tf.float32, shape=()) for _ in range(len(index))])
         
-        self.adaptive_constant = []
+        self.grad_res = []
+        self.grad_meas = []
         for i in range(len(index)):
-            grad_res = []
-            grad_meas = []
-            for j in range(len(layers[index[i]]) - 1):
-                grad_res.append(tf.gradients(loss_res[i], self.weights[index[i]][j])[0])
-                grad_meas.append(tf.gradients(loss_meas[i], self.weights[index[i]][j])[0])
             grad_res_mean = []
             grad_meas_mean = []
             for j in range(len(layers[index[i]]) - 1):
-                grad_res_mean.append(tf.reduce_mean(tf.abs(grad_res[j])))
-                grad_meas_mean.append(tf.reduce_mean(tf.abs(grad_meas[j])))
-            self.adaptive_constant.append(tf.reduce_mean(grad_res_mean) / tf.reduce_mean(grad_meas_mean))
+                grad_res = tf.gradients(loss_res[i], self.weights[index[i]][j])[0]
+                grad_res_mean.append(tf.reduce_mean(tf.abs(grad_res)))
+                
+                grad_meas = tf.gradients(loss_meas[i], self.weights[index[i]][j])[0]
+                grad_meas_mean.append(tf.reduce_mean(tf.abs(grad_meas)))
+                
+            self.grad_res.append(tf.reduce_mean(grad_res_mean))
+            self.grad_meas.append(tf.reduce_mean(grad_meas_mean))
+        
+        self.max_grad = tf.reduce_max(self.grad_res + self.grad_meas)
+        self.lambdas_res = [self.max_grad / grad for grad in self.grad_res]
+        self.lambdas_meas = [self.max_grad / grad for grad in self.grad_meas]
         
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, np.sum(loss_res) + np.dot(self.lambdas, loss_meas) + 0.1*self.gamma_var**2, 
+        self.optimizer.append(OptimizationProcedure(self, np.dot(self.lambdas_res_tf, loss_res) 
+                                                    + np.dot(self.lambdas_meas_tf, loss_meas) 
+                                                    + 0.1*self.gamma_var**2, 
                                                     2000, 
                                                     {'maxiter': 2000, 
                                                      'maxfun': 20000,
@@ -580,8 +588,9 @@ class NeuralNetwork():
         tf_dict[self.x_f_tf] = self.x_f
         tf_dict[self.u_v_tf] = self.u_v
         
-        for i in range(len(self.lambdas)):
-            tf_dict[self.lambdas[i]] = 1
+        for i in range(len(self.lambdas_res_tf)):
+            tf_dict[self.lambdas_res_tf[i]] = 1
+            tf_dict[self.lambdas_meas_tf[i]] = 1
         
         for i in range(len(self.optimizer)):
             print('---> STEP %.0f' % (i+1))
@@ -715,20 +724,20 @@ class OptimizationProcedure():
                 #                 mother.sess.run(mother.MSEv, tf_dict), 
                 #                 mother.sess.run(self.loss, tf_dict), 
                 #                 mother.sess.run(mother.gamma_var))
-                print('Epoch: %.0f | MSEv1: %.5e | MSEv: %.5e | lambda1: %.5e || \
-                      MSEu1: %.5e | MSEf: %.5e | lambda2: %.5e || \
+                print('Epoch: %.0f | MSEv1: %.5e | MSEv: %.5e || \
+                      MSEu1: %.5e | MSEf: %.5e || \
                           Gamma: %.5e || Total: %.5e' %
                   (mother.epoch, mother.sess.run(mother.MSEv1, tf_dict), 
                    mother.sess.run(mother.MSEv, tf_dict), 
-                   mother.sess.run(mother.lambdas[0], tf_dict), 
                    mother.sess.run(mother.MSEu1, tf_dict), 
                    mother.sess.run(mother.MSEf, tf_dict), 
-                   mother.sess.run(mother.lambdas[1], tf_dict),
                    mother.sess.run(mother.gamma_var)**2, 
                    mother.sess.run(self.loss, tf_dict)))
+                    
             mother.sess.run(self.optimizer_adam, tf_dict)
-            loss = mother.sess.run(self.loss, tf_dict)
             
+            #loss = mother.sess.run(self.loss, tf_dict)
+            #
             # if loss > np.amax(last_epochs):
             #     nb_supp = nb_supp + 1
             # elif loss < np.amin(last_epochs):
@@ -737,7 +746,7 @@ class OptimizationProcedure():
             #     lambdai = mother.sess.run(mother.adaptive_constant, tf_dict)
             #     for i in range(len(mother.lambdas)):
             #         tf_dict[mother.lambdas[i]] = mother.beta*lambdai[i] + (1-mother.beta)*tf_dict[mother.lambdas[i]]
-                
+            #
             # if nb_supp > np.ceil(nbEpoch/2):
             #     print('Early stop.')
             #     mother.sess.run(self.optimizer_adam, tf_dict)
@@ -748,12 +757,27 @@ class OptimizationProcedure():
             # for i in range(len(mother.lambdas)):
             #     lambdaArray[i][epoch%nbEpoch] = lambdai[i]
             if epoch%nbEpoch == 0:
-                lambdai = mother.sess.run(mother.adaptive_constant, tf_dict)
+                lambdas_res = mother.sess.run(mother.lambdas_res, tf_dict)
+                lambdas_meas = mother.sess.run(mother.lambdas_meas, tf_dict)
                 # lambdaMean = np.mean(lambdaArray, axis=1)
-                for i in range(len(mother.lambdas)):
-                    if lambdai[i] > 0:
-                        tf_dict[mother.lambdas[i]] = mother.beta*lambdai[i] + (1-mother.beta)*tf_dict[mother.lambdas[i]]
-                    #tf_dict[mother.lambdas[i]] = lambdaMean[i]
+                new_lambdas_res = []
+                new_lambdas_meas = []
+                for i in range(len(lambdas_res)):
+                    if 0 < lambdas_res[i] < np.inf:
+                        new_lambdas_res.append(mother.beta*lambdas_res[i] + (1-mother.beta)*tf_dict[mother.lambdas_res_tf[i]])
+                    else:
+                        new_lambdas_res.append(tf_dict[mother.lambdas_res_tf[i]])
+                    if 0 < lambdas_meas[i] < np.inf:
+                        new_lambdas_meas.append(mother.beta*lambdas_meas[i] + (1-mother.beta)*tf_dict[mother.lambdas_meas_tf[i]])
+                    else:
+                        new_lambdas_meas.append(tf_dict[mother.lambdas_meas_tf[i]])
+                        
+                    tf_dict[mother.lambdas_res_tf[i]] = new_lambdas_res[i]
+                    tf_dict[mother.lambdas_meas_tf[i]] = new_lambdas_meas[i]
+                print(tf_dict[mother.lambdas_res_tf[0]], 
+                  tf_dict[mother.lambdas_res_tf[1]], 
+                  tf_dict[mother.lambdas_meas_tf[0]], 
+                  tf_dict[mother.lambdas_meas_tf[1]])
             
         mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
                              mother.sess.run(mother.MSEu2, tf_dict), 
