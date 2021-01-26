@@ -64,8 +64,8 @@ class ReconstructionNeuralNetwork():
         self.v = v
         self.t = t
         
-        num_hidden_layers = min(max(int(4*Tmax), 5), 10)
-        num_nodes_per_layer = int(5*L) 
+        num_hidden_layers = min(max(int(5*Tmax), 5), 15)
+        num_nodes_per_layer = int(6*L) 
         layers_density = [2] # There are two inputs: space and time
         for _ in range(num_hidden_layers):
             layers_density.append(num_nodes_per_layer)
@@ -84,8 +84,7 @@ class ReconstructionNeuralNetwork():
                                             X_f_train, t_g_train, u_v_train, v_max,
                                             layers_density=layers_density, 
                                             layers_trajectories=layers_trajectories, 
-                                            layers_speed=(1, 5, 5, 5, 1),
-                                            layers_acceleration=(1, 1)) # Creation of the neural network
+                                            layers_speed=(1, 5, 5, 5, 5, 1)) # Creation of the neural network
         self.train() # Training of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
@@ -208,28 +207,6 @@ class ReconstructionNeuralNetwork():
         u = 2*rho-1
         
         return self.neural_network.predict_speed(u)*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
-    
-    def predict_dspeed(self, rho):
-        '''
-        Return the estimated acceleration at rho
-
-        Parameters
-        ----------
-        rho : numpy array (?, )
-            density.
-
-        Returns
-        -------
-        numpy array
-            estimated speed.
-
-        '''
-        
-        u = 2*rho-1
-        dSpeed, dSpeedEq = self.neural_network.predict_dspeed(u)
-        dSpeed = dSpeed*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
-        dSpeedEq = dSpeedEq*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
-        return dSpeed, dSpeedEq
 
     
     def predict_F(self, rho):
@@ -313,8 +290,6 @@ class ReconstructionNeuralNetwork():
         X_prediction = self.predict_trajectories(t_pred)
         rho_speed = np.linspace(0, 1).reshape(-1,1)
         v_prediction = self.predict_speed(rho_speed).reshape(-1,1)
-        (dv_prediction, dvEq) = self.predict_dspeed(rho_speed)
-        (dv_prediction, dvEq) = (dv_prediction.reshape(-1,1), dvEq.reshape(-1,1))
         F_prediction = self.predict_F(rho_speed).reshape(-1,1)
         
         figSpeed = plt.figure(figsize=(7.5, 5))
@@ -330,18 +305,6 @@ class ReconstructionNeuralNetwork():
         plt.xlabel(r'Normalized Density')
         plt.ylabel(r'Speed [km/min]')
         # plt.ylim(-v_prediction[0], v_prediction[0])
-        plt.xlim(0, 1)
-        plt.grid()
-        plt.legend()
-        plt.tight_layout()
-        # plt.title('Reconstruction')
-        figSpeed.savefig('speed.eps', bbox_inches='tight')
-        
-        figSpeed = plt.figure(figsize=(7.5, 5))
-        plt.plot(rho_speed, dv_prediction, rasterized=True, label=r'NN approximation of $dV$')
-        plt.plot(rho_speed, dvEq, rasterized=True, label=r'NN approximation of $dVNeg$')
-        plt.xlabel(r'Normalized Density')
-        plt.ylabel(r'Acceleration [km/min${}^2$]')
         plt.xlim(0, 1)
         plt.grid()
         plt.legend()
