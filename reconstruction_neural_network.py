@@ -64,8 +64,8 @@ class ReconstructionNeuralNetwork():
         self.v = v
         self.t = t
         
-        num_hidden_layers = min(max(int(5*Tmax), 5), 15)
-        num_nodes_per_layer = int(6*L) 
+        num_hidden_layers = min(max(int(4*Tmax), 5), 15)
+        num_nodes_per_layer = int(5*L) 
         layers_density = [2] # There are two inputs: space and time
         for _ in range(num_hidden_layers):
             layers_density.append(num_nodes_per_layer)
@@ -327,6 +327,21 @@ class ReconstructionNeuralNetwork():
         # plt.title('Reconstruction')
         figReconstruction.savefig('reconstruction.eps', bbox_inches='tight')
         
+        plt.figure(figsize=(7.5, 5))
+        color_plot = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        style_plot = ["-", "--"]
+        for i in range(len(self.neural_network.saved_lambdas)):
+            plt.plot(self.neural_network.saved_lambdas[i], label='$\lambda_{i}$'.format(i=i+1), 
+                     linestyle=style_plot[i%2],
+                     color=color_plot[int(i/2)])
+        plt.xlabel(r'Epoch')
+        plt.ylabel(r'Lambda values')
+        plt.grid()
+        plt.legend(loc='best')
+        plt.tight_layout()
+        # plt.title('Absolute error')
+        # figError.savefig('error.eps', bbox_inches='tight') 
+        
         figError = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(t, x)
         plt.pcolor(X, Y, np.abs(rho_prediction-rho), vmin=0.0, vmax=1.0, 
@@ -340,6 +355,6 @@ class ReconstructionNeuralNetwork():
         plt.colorbar()
         plt.tight_layout()
         # plt.title('Absolute error')
-        figError.savefig('error.eps', bbox_inches='tight') 
+        # figError.savefig('error.eps', bbox_inches='tight') 
         
         return [figSpeed, figReconstruction, figError]

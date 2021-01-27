@@ -99,7 +99,6 @@ class NeuralNetwork():
         # Theta neural network
         self.weights['density'], self.biases['density'] = self.initialize_neural_network(layers['density'], init['density'][0], init['density'][1], act="tanh")
         list_var_density = self.weights['density'] + self.biases['density']
-        list_var_density.append(self.gamma_var)
         list_var_density = list_var_density + self.noise_rho_bar
         
         # Phi neural network
@@ -121,6 +120,9 @@ class NeuralNetwork():
         self.encoder1_biases = self.xavier_initializer([1, layers_density[1]], init=np.zeros((1, layers_density[1])))
         self.encoder2_weights = self.xavier_initializer([2, layers_density[1]], init=np.zeros((2, layers_density[1])))
         self.encoder2_biases = self.xavier_initializer([1, layers_density[1]], init=np.zeros((1, layers_density[1])))
+        
+        list_var_density = list_var_density + [self.encoder1_weights, self.encoder1_biases, 
+                                               self.encoder2_weights, self.encoder2_biases]
         
         # Start a TF session
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -162,35 +164,90 @@ class NeuralNetwork():
         #    + tf.reduce_mean(tf.square(tf.nn.relu(self.net_v(self.u_v_tf) - max_speed)))
 
         # Definition of general loss
+        # self.losses = np.array([
+        #     self.MSEv1, self.MSEu1, self.MSEv, self.MSEf
+        # ])
+
+        
+        # self.lambdas_tf = np.array(
+        #     [tf.placeholder(tf.float32, shape=()) for _ in self.losses])
+
+        # self.lambdas_init = [1, 1, 1, 1]
+
+        # variable_lambdas = [
+        #     list_var_speed, list_var_density,
+        #     list_var_speed, list_var_density, 
+        #     [self.gamma_var]
+        # ]
+        
+        # grad_loss_list = []
+        # for i in range(len(self.lambdas_tf)):
+        #     grad_loss = tf.gradients(self.losses[i], variable_lambdas[i])[0]
+        #     grad_loss_list.append(tf.reduce_mean(tf.abs(grad_loss)))
+
+        # max_grad = tf.reduce_mean(grad_loss_list)
+        # # max_grad = []
+        # # i = 0
+        # # for grad in grad_loss_list:
+        # #     max_grad.append(self.lambdas_tf[i] * grad)
+        # #     i = i + 1
+        # # max_grad = tf.reduce_mean(max_grad)
+        # self.lambdas = [max_grad / grad for grad in grad_loss_list]
+
+        # self.loss = np.dot(self.lambdas_tf, self.losses) + 0.25 * tf.square(self.gamma_var)
+        
         self.losses = np.array([
-            self.MSEv1, self.MSEu1, self.MSEv, self.MSEf
+            self.MSEv1, self.MSEv, self.MSEu1, self.MSEf
         ])
 
         
-        self.lambdas_tf = np.array(
-            [tf.placeholder(tf.float32, shape=()) for _ in self.losses])
-
+        self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
+        
         self.lambdas_init = [1, 1, 1, 1]
+        self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
-        variable_lambdas = [
-            list_var_speed, list_var_density,
-            list_var_speed, list_var_density + [self.gamma_var]
+        group_variables = [
+            list_var_speed, list_var_density, 
         ]
         
-        grad_loss_list = []
-        for i in range(len(self.lambdas_tf)):
-            grad_loss = tf.gradients(self.losses[i], variable_lambdas[i])[0]
-            grad_loss_list.append(tf.reduce_mean(tf.abs(grad_loss)))
+        loss_jacobian = []
+        weight_jacobian = []
+        for j in range(len(group_variables)):
+            grad_loss_variable = []
+            for i in range(len(self.losses)):
+                grad_loss = tf.gradients(self.losses[i], group_variables[j])[0]
+                if grad_loss == None:
+                    grad_loss = tf.constant(0.)
+                grad_loss_variable.append(tf.reduce_mean(tf.abs(grad_loss)))
+            loss_jacobian.append(grad_loss_variable)
+            weight_jacobian.append(number_elements(group_variables[j]))
+        loss_jacobian = tf.convert_to_tensor(loss_jacobian)
+        weight_jacobian = tf.reshape(tf.convert_to_tensor(weight_jacobian), (-1, 1))
+        self.weight_jacobian = tf.tile(weight_jacobian, [1, len(self.losses)])
+        
+        old_lambdas = tf.reshape(tf.convert_to_tensor(self.lambdas_tf), (1, -1))
+        old_lambdas = tf.tile(old_lambdas, [len(group_variables), 1])
+        nz_mean = nonzero_mean(loss_jacobian, axis=1)
+        nz_mean = tf.tile(nz_mean, [1, len(self.losses)])
+        
+        self.lambdas = tf.divide(nz_mean, loss_jacobian)
+        
 
-        max_grad = tf.reduce_mean(grad_loss_list)
-        self.lambdas = [max_grad / grad for grad in grad_loss_list]
+        # max_grad = tf.reduce_mean(grad_loss_list)
+        # max_grad = []
+        # i = 0
+        # for grad in grad_loss_list:
+        #     max_grad.append(self.lambdas_tf[i] * grad)
+        #     i = i + 1
+        # max_grad = tf.reduce_mean(max_grad)
+        # self.lambdas = [max_grad / grad for grad in grad_loss_list]
 
-        self.loss = np.dot(self.lambdas_tf, self.losses) + 0.25 * tf.square(self.gamma_var)
+        self.loss = np.dot(self.lambdas_tf, self.losses)
         
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss, 
+        self.optimizer.append(OptimizationProcedure(self, self.loss + 0.25 * tf.square(self.gamma_var), 
                                                     2000, 
-                                                    {'maxiter': 10000, 
+                                                    {'maxiter': 2000, 
                                                      'maxfun': 20000,
                                                      'maxcor': 75,
                                                      'maxls': 50,
@@ -311,7 +368,7 @@ class NeuralNetwork():
             encoder2 = tf.nn.tanh(tf.add(tf.matmul(X, self.encoder2_weights), self.encoder2_biases))
         else:
             encoder1 = 1
-            encoder2 = 2
+            encoder2 = 0
 
         H = X
         for l in range(num_layers - 2):
@@ -528,7 +585,7 @@ class NeuralNetwork():
                 tf_dict[self.lambdas_tf[j]] = self.lambdas_init[j]
             print('---> STEP %.0f' % (i+1))
             self.epoch = 1
-            self.optimizer[i].train(tf_dict, i+1)    
+            self.saved_lambdas = self.optimizer[i].train(tf_dict, i+1)    
     
     def predict(self, t, x):
         '''
@@ -633,8 +690,10 @@ class OptimizationProcedure():
         
     def train(self, tf_dict, step=1):
         mother = self.mother
+        saved_lambdas = [[] for _ in mother.lambdas_tf]
         print('------> %.0f. ADAM' % step)
         nbEpoch = 10
+        weights = mother.sess.run(mother.weight_jacobian)
         for epoch in range(self.epochs):
             mother.epoch = epoch + 1
             if epoch%nbEpoch == 0:
@@ -652,10 +711,14 @@ class OptimizationProcedure():
             
             if epoch%nbEpoch == 0:
                 lambdas = mother.sess.run(mother.lambdas, tf_dict)
+                lambdas = noninf_mean(lambdas, weights)
                 for i in range(len(lambdas)):
-                    if 0 < lambdas[i] < np.inf:
-                        tf_dict[mother.lambdas_tf[i]] = np.max([np.min([mother.beta * lambdas[i] \
-                            + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]], 100]), 0.001])
+                    if 0 <= lambdas[i] < np.inf:
+                        lambdas[i] = min([max([lambdas[i], 0.01]), 100])
+                        new_lambda = mother.beta * lambdas[i] \
+                            + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
+                        saved_lambdas[i].append(new_lambda)
+                        tf_dict[mother.lambdas_tf[i]] = new_lambda
                 print([tf_dict[mother.lambdas_tf[i]] for i in range(len(lambdas))])
             
         mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
@@ -677,3 +740,39 @@ class OptimizationProcedure():
                                          mother.MSEg, mother.MSEv1, mother.MSEv2, mother.MSEv,
                                          self.loss, mother.gamma_var],
                                 loss_callback=mother.loss_callback)
+        return saved_lambdas
+    
+def number_elements(tensor_list, dtype=tf.dtypes.float32):
+    total_number = 0
+    for tensor in tensor_list:
+        total_number = total_number + tf.size(tensor, out_type=dtype)
+    return total_number
+
+def noninf_mean(arr, weight=None):
+    shape = arr.shape
+    
+    if weight is None:
+        weight = np.ones(shape)
+        
+    result = []
+    for j in range(shape[1]):
+        column = 0
+        total_weight = 0
+        for i in range(shape[0]):
+            value = arr[i, j]
+            w = weight[i, j]
+            if np.isfinite(value):
+                column = column + w * value
+                total_weight = total_weight + w
+        if total_weight > 0:
+            column = column / total_weight
+        else:
+            column = 0
+        result.append(column)
+    return result
+            
+        
+def nonzero_mean(tensor, axis=None):
+    sum_tensor = tf.reduce_sum(tensor, axis=axis, keepdims=True)
+    nonzero_values = tf.math.count_nonzero(tensor, axis=axis, dtype=tf.dtypes.float32, keepdims=True)
+    return tf.divide(sum_tensor, nonzero_values)
