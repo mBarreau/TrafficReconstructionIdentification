@@ -327,7 +327,7 @@ class ReconstructionNeuralNetwork():
         # plt.title('Reconstruction')
         figReconstruction.savefig('reconstruction.eps', bbox_inches='tight')
         
-        plt.figure(figsize=(7.5, 5))
+        figLambda = plt.figure(figsize=(7.5, 5))
         color_plot = plt.rcParams['axes.prop_cycle'].by_key()['color']
         style_plot = ["-", "--"]
         for i in range(len(self.neural_network.saved_lambdas)):
@@ -340,7 +340,7 @@ class ReconstructionNeuralNetwork():
         plt.legend(loc='best')
         plt.tight_layout()
         # plt.title('Absolute error')
-        # figError.savefig('error.eps', bbox_inches='tight') 
+        figLambda.savefig('lambda.eps', bbox_inches='tight') 
         
         figError = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(t, x)

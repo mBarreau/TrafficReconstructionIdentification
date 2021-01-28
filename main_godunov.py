@@ -24,7 +24,7 @@ rhoBar = 0.5 # Average density of cars on the road
 rhoSigma = 0.45 # initial condition standard deviation
 rhoMax = 120 # Number of vehicles per kilometer
 noise = False # noise on the measurements and on the trajectories
-greenshield = False # Type of flux function used for the numerical simulation
+greenshield = True # Type of flux function used for the numerical simulation
 Ncar = rhoBar*rhoMax*L # Number of cars
 Npv = int(Ncar*p) # Number of PV
 

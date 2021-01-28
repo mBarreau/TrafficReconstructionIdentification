@@ -66,7 +66,7 @@ class NeuralNetwork():
 
         '''
         
-        self.beta = 0.01
+        self.beta = 0.05
 
         self.t = t
         self.x = x 
@@ -196,42 +196,76 @@ class NeuralNetwork():
 
         # self.loss = np.dot(self.lambdas_tf, self.losses) + 0.25 * tf.square(self.gamma_var)
         
-        self.losses = np.array([
+        self.losses = [
             self.MSEv1, self.MSEv, self.MSEu1, self.MSEf
-        ])
+        ]
 
         
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
         
-        self.lambdas_init = [1, 1, 1, 1]
+        self.lambdas_init = [50, 50, 50, 50]
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
         group_variables = [
             list_var_speed, list_var_density, 
         ]
         
+        # loss_jacobian = []
+        # weight_jacobian = []
+        # for j in range(len(group_variables)):
+        #     grad_loss_variable = []
+        #     for i in range(len(self.losses)):
+        #         grad_loss = tf.gradients(self.losses[i], group_variables[j])[0]
+        #         if grad_loss == None:
+        #             grad_loss = tf.constant(0.)
+        #         grad_loss_variable.append(tf.reduce_mean(tf.abs(grad_loss)))
+        #     loss_jacobian.append(grad_loss_variable)
+        #     weight_jacobian.append(number_elements(group_variables[j]))
+        # loss_jacobian = tf.convert_to_tensor(loss_jacobian)
+        # weight_jacobian = tf.reshape(tf.convert_to_tensor(weight_jacobian), (-1, 1))
+        # self.weight_jacobian = tf.tile(weight_jacobian, [1, len(self.losses)])
+        
+        # old_lambdas = tf.reshape(tf.convert_to_tensor(self.lambdas_tf), (1, -1))
+        # old_lambdas = tf.tile(old_lambdas, [len(group_variables), 1])
+        # nz_mean = nonzero_mean(loss_jacobian * old_lambdas, axis=1)
+        # nz_mean = tf.tile(nz_mean, [1, len(self.losses)])
+        
+        # self.lambdas = tf.divide(nz_mean, loss_jacobian)
+        
         loss_jacobian = []
         weight_jacobian = []
         for j in range(len(group_variables)):
             grad_loss_variable = []
+            weight_loss_variable = []
             for i in range(len(self.losses)):
-                grad_loss = tf.gradients(self.losses[i], group_variables[j])[0]
-                if grad_loss == None:
-                    grad_loss = tf.constant(0.)
-                grad_loss_variable.append(tf.reduce_mean(tf.abs(grad_loss)))
+                grad_loss = tf.gradients(self.losses[i], group_variables[j])
+                stacked_grad = []
+                for grad in grad_loss:
+                    if grad is not None:
+                        stacked_grad.append(tf.reshape(grad, (-1, 1)))
+                if len(stacked_grad) > 0:
+                    stacked_grad = tf.concat(stacked_grad, 0)
+                else:
+                    stacked_grad = tf.constant(0.)
+                    #grad_loss_variable.append(tf.constant(0.))
+                grad_loss_variable.append(tf.reduce_mean(tf.abs(stacked_grad)))
+                weight_loss_variable.append(tf.size(stacked_grad, out_type=tf.dtypes.float32))
             loss_jacobian.append(grad_loss_variable)
-            weight_jacobian.append(number_elements(group_variables[j]))
+            #weight_jacobian.append(number_elements(group_variables[j]))
+            weight_jacobian.append(weight_loss_variable)
+            
         loss_jacobian = tf.convert_to_tensor(loss_jacobian)
-        weight_jacobian = tf.reshape(tf.convert_to_tensor(weight_jacobian), (-1, 1))
-        self.weight_jacobian = tf.tile(weight_jacobian, [1, len(self.losses)])
+        self.weight_jacobian = tf.convert_to_tensor(weight_jacobian)
+        #self.weight_jacobian = tf.reshape(tf.convert_to_tensor(weight_jacobian), (-1, 1))
+        #self.weight_jacobian = tf.tile(weight_jacobian, [1, len(self.losses)])
         
-        old_lambdas = tf.reshape(tf.convert_to_tensor(self.lambdas_tf), (1, -1))
-        old_lambdas = tf.tile(old_lambdas, [len(group_variables), 1])
-        nz_mean = nonzero_mean(loss_jacobian, axis=1)
+        # old_lambdas = tf.reshape(tf.convert_to_tensor(self.lambdas_tf), (1, -1))
+        # old_lambdas = tf.tile(old_lambdas, [len(group_variables), 1])
+        old_lambdas = tf.convert_to_tensor(self.lambdas_tf)
+        nz_mean = nonzero_mean(loss_jacobian * old_lambdas, axis=1)
         nz_mean = tf.tile(nz_mean, [1, len(self.losses)])
         
         self.lambdas = tf.divide(nz_mean, loss_jacobian)
-        
 
         # max_grad = tf.reduce_mean(grad_loss_list)
         # max_grad = []
@@ -242,10 +276,10 @@ class NeuralNetwork():
         # max_grad = tf.reduce_mean(max_grad)
         # self.lambdas = [max_grad / grad for grad in grad_loss_list]
 
-        self.loss = np.dot(self.lambdas_tf, self.losses)
+        self.loss = np.dot(np.array(self.lambdas_tf), np.array(self.losses))
         
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss + 0.25 * tf.square(self.gamma_var), 
+        self.optimizer.append(OptimizationProcedure(self, self.loss + 10 * tf.square(self.gamma_var), 
                                                     2000, 
                                                     {'maxiter': 2000, 
                                                      'maxfun': 20000,
@@ -714,7 +748,7 @@ class OptimizationProcedure():
                 lambdas = noninf_mean(lambdas, weights)
                 for i in range(len(lambdas)):
                     if 0 <= lambdas[i] < np.inf:
-                        lambdas[i] = min([max([lambdas[i], 0.01]), 100])
+                        lambdas[i] = min([lambdas[i], 100])
                         new_lambda = mother.beta * lambdas[i] \
                             + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
                         saved_lambdas[i].append(new_lambda)
@@ -760,7 +794,7 @@ def noninf_mean(arr, weight=None):
         total_weight = 0
         for i in range(shape[0]):
             value = arr[i, j]
-            w = weight[i, j]
+            w = weight[i,j]
             if np.isfinite(value):
                 column = column + w * value
                 total_weight = total_weight + w
