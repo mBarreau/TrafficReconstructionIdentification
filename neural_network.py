@@ -18,8 +18,8 @@ import numpy as np
 
 class NeuralNetwork():
 
-    def __init__(self, t, x, u, v, X_f, t_g, u_v, max_speed,
-                 layers_density, layers_trajectories, layers_speed,
+    def __init__(self, t, x, u, v, X_f, t_g, u_v,
+                 layers_density, layers_trajectories, layers_speed, max_speed=None,
                  init_density=[[], []], init_trajectories=[[], []], init_speed=[[], []]):
      
         '''
@@ -67,6 +67,7 @@ class NeuralNetwork():
         '''
         
         self.beta = 0.05
+        self.nbEpoch = 10
 
         self.t = t
         self.x = x 
@@ -196,18 +197,24 @@ class NeuralNetwork():
 
         # self.loss = np.dot(self.lambdas_tf, self.losses) + 0.25 * tf.square(self.gamma_var)
         
+        # self.losses = [
+        #     self.MSEv1, self.MSEv, self.MSEu1, self.MSEf
+        # ]
         self.losses = [
-            self.MSEv1, self.MSEv, self.MSEu1, self.MSEf
+            self.MSEu1, self.MSEf
         ]
 
         
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
         
-        self.lambdas_init = [50, 50, 50, 50]
+        self.lambdas_init = [0.5] * len(self.losses)
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
+        # group_variables = [
+        #     list_var_speed, list_var_density, 
+        # ]
         group_variables = [
-            list_var_speed, list_var_density, 
+            list_var_density
         ]
         
         # loss_jacobian = []
@@ -279,9 +286,9 @@ class NeuralNetwork():
         self.loss = np.dot(np.array(self.lambdas_tf), np.array(self.losses))
         
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss + 10 * tf.square(self.gamma_var), 
+        self.optimizer.append(OptimizationProcedure(self, self.loss + 0 * tf.square(self.gamma_var), 
                                                     2000, 
-                                                    {'maxiter': 2000, 
+                                                    {'maxiter': 6000, 
                                                      'maxfun': 20000,
                                                      'maxcor': 75,
                                                      'maxls': 50,
@@ -429,8 +436,14 @@ class NeuralNetwork():
             Standardized velocity.
 
         '''
-        return (tf.square(self.neural_network(u, self.weights['speed'], 
-                    self.biases['speed'], act=tf.nn.tanh))*(1+u) + self.max_speed/2)*(1-u)
+        
+        # v_tanh = tf.square(self.neural_network(u, self.weights['speed'], 
+        #             self.biases['speed'], act=tf.nn.tanh))
+        # if self.max_speed is None:
+        #     return v_tanh*(1-u)
+        # else:
+        #     return (v_tanh*(1+u)/2 + self.max_speed)*(1-u)/2
+        return self.max_speed*(1-u)/2
     
     def net_ddf(self, u):
         '''
@@ -467,9 +480,10 @@ class NeuralNetwork():
             standardized characteristic speed.
 
         '''
-        v = self.net_v(u)
-        v_u = tf.gradients(v, u)[0]
-        return v + (u+1)*v_u 
+        # v = self.net_v(u)
+        # v_u = tf.gradients(v, u)[0]
+        # return v + (u+1)*v_u 
+        return - self.max_speed * u
 
     def net_u(self, t, x):
         '''
@@ -659,7 +673,8 @@ class NeuralNetwork():
 
         '''
         u = np.float32(u)
-        return self.sess.run(self.net_v(u))
+        # return self.sess.run(self.net_v(u))
+        return self.net_v(u)
     
     def predict_F(self, u):
         '''
@@ -724,13 +739,13 @@ class OptimizationProcedure():
         
     def train(self, tf_dict, step=1):
         mother = self.mother
-        saved_lambdas = [[] for _ in mother.lambdas_tf]
+        saved_lambdas = [[lambda_init] for lambda_init in mother.lambdas_init]
         print('------> %.0f. ADAM' % step)
-        nbEpoch = 10
         weights = mother.sess.run(mother.weight_jacobian)
         for epoch in range(self.epochs):
             mother.epoch = epoch + 1
-            if epoch%nbEpoch == 0:
+            
+            if epoch % mother.nbEpoch == 0:
                 print('Epoch: %.0f | MSEv1: %.5e | MSEv: %.5e || \
                       MSEu1: %.5e | MSEf: %.5e || \
                           Gamma: %.5e || Total: %.5e' %
@@ -743,17 +758,17 @@ class OptimizationProcedure():
                     
             mother.sess.run(self.optimizer_adam, tf_dict)
             
-            if epoch%nbEpoch == 0:
-                lambdas = mother.sess.run(mother.lambdas, tf_dict)
-                lambdas = noninf_mean(lambdas, weights)
-                for i in range(len(lambdas)):
-                    if 0 <= lambdas[i] < np.inf:
-                        lambdas[i] = min([lambdas[i], 100])
+            if epoch % mother.nbEpoch == 0:
+                if 0 < mother.beta <= 1:
+                    lambdas = mother.sess.run(mother.lambdas, tf_dict)
+                    lambdas = noninf_mean(lambdas, weights)
+                    for i in range(len(lambdas)):
+                        lambdas[i] = min([lambdas[i], 1])
                         new_lambda = mother.beta * lambdas[i] \
                             + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
                         saved_lambdas[i].append(new_lambda)
                         tf_dict[mother.lambdas_tf[i]] = new_lambda
-                print([tf_dict[mother.lambdas_tf[i]] for i in range(len(lambdas))])
+                print([tf_dict[mother.lambdas_tf[i]] for i in range(len(mother.lambdas_tf))])
             
         mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
                              mother.sess.run(mother.MSEu2, tf_dict), 
@@ -767,6 +782,8 @@ class OptimizationProcedure():
                              mother.sess.run(mother.gamma_var))
             
         print('------> %.0f. BFGS' % step)
+        # for i, lambda_init in enumerate(mother.lambdas_init):
+        #     tf_dict[mother.lambdas_tf[i]] = lambda_init
             
         self.optimizer_BFGS.minimize(mother.sess,
                                 feed_dict=tf_dict,

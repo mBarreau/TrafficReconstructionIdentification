@@ -44,8 +44,10 @@ axisPlot = simu_godunov.getAxisPlot()
 # collect data from PV
 t_train, x_train, rho_train, v_train = simu_godunov.getMeasurements(selectedPacket=-1, totalPacket=-1, noise=noise)
 
-trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train, Vf,
-                                                    L, Tmax, N_f=1000, N_g=100)
+trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
+                                                    L, Tmax, v_max=Vf, N_f=1000, N_g=100)
+
+trained_neural_network.train()
 
 [_, _, figError] = trained_neural_network.plot(axisPlot, rho)
 simu_godunov.pv.plot()

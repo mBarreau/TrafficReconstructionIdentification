@@ -29,7 +29,7 @@ def amax(l):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, t, x, rho, v, v_max, L, Tmax, N_f=1000, N_g=100, N_v=50):
+    def __init__(self, t, x, rho, v, L, Tmax, v_max=None, N_f=1000, N_g=100, N_v=50):
         '''
         Initialize a neural network for density reconstruction
 
@@ -81,11 +81,11 @@ class ReconstructionNeuralNetwork():
         t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train, v_max = self.createTrainingDataset(t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
         
         self.neural_network = NeuralNetwork(t_train, x_train, u_train, v_train, 
-                                            X_f_train, t_g_train, u_v_train, v_max,
+                                            X_f_train, t_g_train, u_v_train,
                                             layers_density=layers_density, 
                                             layers_trajectories=layers_trajectories, 
-                                            layers_speed=(1, 5, 5, 5, 5, 1)) # Creation of the neural network
-        self.train() # Training of the neural network
+                                            layers_speed=(1, 5, 5, 5, 5, 1),
+                                            max_speed=v_max) # Creation of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
         '''
@@ -135,7 +135,8 @@ class ReconstructionNeuralNetwork():
         t = [2*(t_temp - self.lb[1])/(self.ub[1] - self.lb[1]) - 1 for t_temp in t]
         rho = [2*rho_temp-1 for rho_temp in rho]
         v = [v_temp*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0]) for v_temp in v]
-        v_max = v_max*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0])
+        if v_max is not None:
+            v_max = v_max*(self.ub[1] - self.lb[1]) / (self.ub[0] - self.lb[0])
         
         X_f = np.array([2, 2])*lhs(2, samples=N_f)
         X_f = X_f - np.ones(X_f.shape)
@@ -330,13 +331,16 @@ class ReconstructionNeuralNetwork():
         figLambda = plt.figure(figsize=(7.5, 5))
         color_plot = plt.rcParams['axes.prop_cycle'].by_key()['color']
         style_plot = ["-", "--"]
+        epochs = np.arange(len(self.neural_network.saved_lambdas[0])) * self.neural_network.nbEpoch
         for i in range(len(self.neural_network.saved_lambdas)):
-            plt.plot(self.neural_network.saved_lambdas[i], label='$\lambda_{i}$'.format(i=i+1), 
+            plt.plot(epochs, self.neural_network.saved_lambdas[i], label='$\lambda_{i}$'.format(i=i+1), 
                      linestyle=style_plot[i%2],
                      color=color_plot[int(i/2)])
         plt.xlabel(r'Epoch')
         plt.ylabel(r'Lambda values')
         plt.grid()
+        plt.xlim(0, max(epochs))
+        plt.ylim(0, 1)
         plt.legend(loc='best')
         plt.tight_layout()
         # plt.title('Absolute error')
@@ -354,6 +358,7 @@ class ReconstructionNeuralNetwork():
         plt.ylim(min(x), max(x))
         plt.colorbar()
         plt.tight_layout()
+        print("Normalized L^2 error: ", np.mean(np.square(rho_prediction-rho)))
         # plt.title('Absolute error')
         # figError.savefig('error.eps', bbox_inches='tight') 
         

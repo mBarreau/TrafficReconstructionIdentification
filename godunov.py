@@ -260,7 +260,7 @@ class SimuGodunov:
     
         for n in range(1, Nt): # Apply numerical estimation
                 
-            z[0, n] = min(max(self.zTop[n], self.zMin), self.zMax)
+            z[0, n] = min(max(self.zBottom[n], self.zMin), self.zMax)
             
             for i in range(1, Nx-1): # Real traffic state
         
@@ -275,7 +275,7 @@ class SimuGodunov:
                 
                 z[i, n] = min(max(z[i, n], self.zMin), self.zMax)
         
-            z[-1, n] = min(max(self.zBottom[n], self.zMin), self.zMax)
+            z[-1, n] = min(max(self.zTop[n], self.zMin), self.zMax)
             
             self.pv.update(z[:, n], n)
         
