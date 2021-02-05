@@ -20,7 +20,8 @@ class NeuralNetwork():
 
     def __init__(self, t, x, u, v, X_f, t_g, u_v,
                  layers_density, layers_trajectories, layers_speed, max_speed=None,
-                 init_density=[[], []], init_trajectories=[[], []], init_speed=[[], []]):
+                 init_density=[[], []], init_trajectories=[[], []], init_speed=[[], []],
+                 beta=0.05, N_epochs=500, N_lambda=5, adam=True):
      
         '''
         Initialize a neural network for regression purposes.
@@ -66,8 +67,12 @@ class NeuralNetwork():
 
         '''
         
+        tf.reset_default_graph()
+        
         self.beta = 0.05
-        self.nbEpoch = 10
+        self.N_epochs = N_epochs
+        self.N_lambda = N_lambda
+        self.adam = True
 
         self.t = t
         self.x = x 
@@ -164,80 +169,19 @@ class NeuralNetwork():
         self.MSEv = tf.reduce_mean(tf.square(tf.nn.relu(self.net_ddf(self.u_v_tf))))
         #    + tf.reduce_mean(tf.square(tf.nn.relu(self.net_v(self.u_v_tf) - max_speed)))
 
-        # Definition of general loss
-        # self.losses = np.array([
-        #     self.MSEv1, self.MSEu1, self.MSEv, self.MSEf
-        # ])
-
-        
-        # self.lambdas_tf = np.array(
-        #     [tf.placeholder(tf.float32, shape=()) for _ in self.losses])
-
-        # self.lambdas_init = [1, 1, 1, 1]
-
-        # variable_lambdas = [
-        #     list_var_speed, list_var_density,
-        #     list_var_speed, list_var_density, 
-        #     [self.gamma_var]
-        # ]
-        
-        # grad_loss_list = []
-        # for i in range(len(self.lambdas_tf)):
-        #     grad_loss = tf.gradients(self.losses[i], variable_lambdas[i])[0]
-        #     grad_loss_list.append(tf.reduce_mean(tf.abs(grad_loss)))
-
-        # max_grad = tf.reduce_mean(grad_loss_list)
-        # # max_grad = []
-        # # i = 0
-        # # for grad in grad_loss_list:
-        # #     max_grad.append(self.lambdas_tf[i] * grad)
-        # #     i = i + 1
-        # # max_grad = tf.reduce_mean(max_grad)
-        # self.lambdas = [max_grad / grad for grad in grad_loss_list]
-
-        # self.loss = np.dot(self.lambdas_tf, self.losses) + 0.25 * tf.square(self.gamma_var)
-        
-        # self.losses = [
-        #     self.MSEv1, self.MSEv, self.MSEu1, self.MSEf
-        # ]
+        # Lambda update procedure
         self.losses = [
-            self.MSEu1, self.MSEf
+            self.MSEu1, self.MSEf, tf.square(self.gamma_var)
         ]
-
-        
+ 
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
         
         self.lambdas_init = [0.5] * len(self.losses)
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
-        # group_variables = [
-        #     list_var_speed, list_var_density, 
-        # ]
         group_variables = [
-            list_var_density
+            list_var_density, self.gamma_var
         ]
-        
-        # loss_jacobian = []
-        # weight_jacobian = []
-        # for j in range(len(group_variables)):
-        #     grad_loss_variable = []
-        #     for i in range(len(self.losses)):
-        #         grad_loss = tf.gradients(self.losses[i], group_variables[j])[0]
-        #         if grad_loss == None:
-        #             grad_loss = tf.constant(0.)
-        #         grad_loss_variable.append(tf.reduce_mean(tf.abs(grad_loss)))
-        #     loss_jacobian.append(grad_loss_variable)
-        #     weight_jacobian.append(number_elements(group_variables[j]))
-        # loss_jacobian = tf.convert_to_tensor(loss_jacobian)
-        # weight_jacobian = tf.reshape(tf.convert_to_tensor(weight_jacobian), (-1, 1))
-        # self.weight_jacobian = tf.tile(weight_jacobian, [1, len(self.losses)])
-        
-        # old_lambdas = tf.reshape(tf.convert_to_tensor(self.lambdas_tf), (1, -1))
-        # old_lambdas = tf.tile(old_lambdas, [len(group_variables), 1])
-        # nz_mean = nonzero_mean(loss_jacobian * old_lambdas, axis=1)
-        # nz_mean = tf.tile(nz_mean, [1, len(self.losses)])
-        
-        # self.lambdas = tf.divide(nz_mean, loss_jacobian)
         
         loss_jacobian = []
         weight_jacobian = []
@@ -254,40 +198,24 @@ class NeuralNetwork():
                     stacked_grad = tf.concat(stacked_grad, 0)
                 else:
                     stacked_grad = tf.constant(0.)
-                    #grad_loss_variable.append(tf.constant(0.))
                 grad_loss_variable.append(tf.reduce_mean(tf.abs(stacked_grad)))
                 weight_loss_variable.append(tf.size(stacked_grad, out_type=tf.dtypes.float32))
             loss_jacobian.append(grad_loss_variable)
-            #weight_jacobian.append(number_elements(group_variables[j]))
             weight_jacobian.append(weight_loss_variable)
             
         loss_jacobian = tf.convert_to_tensor(loss_jacobian)
         self.weight_jacobian = tf.convert_to_tensor(weight_jacobian)
-        #self.weight_jacobian = tf.reshape(tf.convert_to_tensor(weight_jacobian), (-1, 1))
-        #self.weight_jacobian = tf.tile(weight_jacobian, [1, len(self.losses)])
-        
-        # old_lambdas = tf.reshape(tf.convert_to_tensor(self.lambdas_tf), (1, -1))
-        # old_lambdas = tf.tile(old_lambdas, [len(group_variables), 1])
+
         old_lambdas = tf.convert_to_tensor(self.lambdas_tf)
         nz_mean = nonzero_mean(loss_jacobian * old_lambdas, axis=1)
         nz_mean = tf.tile(nz_mean, [1, len(self.losses)])
-        
         self.lambdas = tf.divide(nz_mean, loss_jacobian)
-
-        # max_grad = tf.reduce_mean(grad_loss_list)
-        # max_grad = []
-        # i = 0
-        # for grad in grad_loss_list:
-        #     max_grad.append(self.lambdas_tf[i] * grad)
-        #     i = i + 1
-        # max_grad = tf.reduce_mean(max_grad)
-        # self.lambdas = [max_grad / grad for grad in grad_loss_list]
 
         self.loss = np.dot(np.array(self.lambdas_tf), np.array(self.losses))
         
         self.optimizer = []
-        self.optimizer.append(OptimizationProcedure(self, self.loss + 0 * tf.square(self.gamma_var), 
-                                                    2000, 
+        self.optimizer.append(OptimizationProcedure(self, self.loss, 
+                                                    self.N_epochs, 
                                                     {'maxiter': 6000, 
                                                      'maxfun': 20000,
                                                      'maxcor': 75,
@@ -723,10 +651,15 @@ class OptimizationProcedure():
         self.global_step = tf.Variable(0, trainable=False)
         starter_learning_rate = 1e-3
         self.learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
-                                                        1000, 0.9, staircase=False)        
-        self.optimizer_adam = tf.train.AdamOptimizer(self.learning_rate).minimize(loss, 
+                                                        epochs, 0.9, staircase=False)        
+        if mother.adam:
+            self.first_order_optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(loss, 
                                                                                   var_list=var_list, 
                                                                                   global_step=self.global_step)
+        else:
+            self.first_order_optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(loss, 
+                                                                                  var_list=var_list, 
+                                                                                  global_step=self.global_step)  
         
         # Define BFGS
         self.optimizer_BFGS = tf.contrib.opt.ScipyOptimizerInterface(loss, var_list=var_list,
@@ -740,12 +673,12 @@ class OptimizationProcedure():
     def train(self, tf_dict, step=1):
         mother = self.mother
         saved_lambdas = [[lambda_init] for lambda_init in mother.lambdas_init]
-        print('------> %.0f. ADAM' % step)
+        print('------> %.0f. Gradient Descent' % step)
         weights = mother.sess.run(mother.weight_jacobian)
         for epoch in range(self.epochs):
             mother.epoch = epoch + 1
             
-            if epoch % mother.nbEpoch == 0:
+            if epoch % mother.N_lambda == 0:
                 print('Epoch: %.0f | MSEv1: %.5e | MSEv: %.5e || \
                       MSEu1: %.5e | MSEf: %.5e || \
                           Gamma: %.5e || Total: %.5e' %
@@ -756,19 +689,16 @@ class OptimizationProcedure():
                    mother.sess.run(mother.gamma_var)**2, 
                    mother.sess.run(self.loss, tf_dict)))
                     
-            mother.sess.run(self.optimizer_adam, tf_dict)
+            mother.sess.run(self.first_order_optimizer, tf_dict)
             
-            if epoch % mother.nbEpoch == 0:
-                if 0 < mother.beta <= 1:
-                    lambdas = mother.sess.run(mother.lambdas, tf_dict)
-                    lambdas = noninf_mean(lambdas, weights)
-                    for i in range(len(lambdas)):
-                        lambdas[i] = min([lambdas[i], 1])
-                        new_lambda = mother.beta * lambdas[i] \
-                            + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
-                        saved_lambdas[i].append(new_lambda)
-                        tf_dict[mother.lambdas_tf[i]] = new_lambda
-                print([tf_dict[mother.lambdas_tf[i]] for i in range(len(mother.lambdas_tf))])
+            if 0 < mother.beta <= 1:
+                lambdas = mother.sess.run(mother.lambdas, tf_dict)
+                lambdas = noninf_mean(lambdas, weights)
+                for i in range(len(saved_lambdas)):
+                    lambdas[i] = min([lambdas[i], 1])
+                    new_lambda = mother.beta * lambdas[i] \
+                        + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
+                    tf_dict[mother.lambdas_tf[i]] = new_lambda
             
         mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
                              mother.sess.run(mother.MSEu2, tf_dict), 
@@ -822,7 +752,6 @@ def noninf_mean(arr, weight=None):
         result.append(column)
     return result
             
-        
 def nonzero_mean(tensor, axis=None):
     sum_tensor = tf.reduce_sum(tensor, axis=axis, keepdims=True)
     nonzero_values = tf.math.count_nonzero(tensor, axis=axis, dtype=tf.dtypes.float32, keepdims=True)
