@@ -21,7 +21,7 @@ class NeuralNetwork():
     def __init__(self, t, x, u, v, X_f, t_g, u_v,
                  layers_density, layers_trajectories, layers_speed, max_speed=None,
                  init_density=[[], []], init_trajectories=[[], []], init_speed=[[], []],
-                 beta=0.05, N_epochs=500, N_lambda=5, adam=True):
+                 beta=0.05, N_epochs=1000, N_lambda=10, adam=False):
      
         '''
         Initialize a neural network for regression purposes.
@@ -87,9 +87,7 @@ class NeuralNetwork():
         self.N = len(self.x) # Number of agents
         self.max_speed = max_speed
 
-        self.gamma_var = tf.Variable(tf.random.truncated_normal([1,1], mean=0, 
-                                                         stddev=0.01, dtype=tf.float32), 
-                                     dtype=tf.float32, trainable=True)
+        self.gamma_var = tf.Variable(1e-2, dtype=tf.float32, trainable=True)
         self.noise_rho_bar = [tf.Variable(tf.random.truncated_normal([1,1], mean=0, 
                                                          stddev=0.01, dtype=tf.float32), 
                                      dtype=tf.float32, trainable=True) for _ in range(self.N)]
@@ -177,6 +175,8 @@ class NeuralNetwork():
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
         
         self.lambdas_init = [0.5] * len(self.losses)
+        self.lambdas_init[-1] = 0
+        
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
         group_variables = [
@@ -216,7 +216,7 @@ class NeuralNetwork():
         self.optimizer = []
         self.optimizer.append(OptimizationProcedure(self, self.loss, 
                                                     self.N_epochs, 
-                                                    {'maxiter': 6000, 
+                                                    {'maxiter': 2000, 
                                                      'maxfun': 20000,
                                                      'maxcor': 75,
                                                      'maxls': 50,
@@ -679,9 +679,8 @@ class OptimizationProcedure():
             mother.epoch = epoch + 1
             
             if epoch % mother.N_lambda == 0:
-                print('Epoch: %.0f | MSEv1: %.5e | MSEv: %.5e || \
-                      MSEu1: %.5e | MSEf: %.5e || \
-                          Gamma: %.5e || Total: %.5e' %
+                print('Epoch: %.0f | MSEv1: %.5e | MSEv: %.5e || MSEu1: %.5e | MSEf: %.5e || Gamma: %.5e || \
+                      Total: %.5e' %
                   (mother.epoch, mother.sess.run(mother.MSEv1, tf_dict), 
                    mother.sess.run(mother.MSEv, tf_dict), 
                    mother.sess.run(mother.MSEu1, tf_dict), 
@@ -699,6 +698,7 @@ class OptimizationProcedure():
                         lambdas[i] = min([lambdas[i], 1])
                         new_lambda = mother.beta * lambdas[i] \
                             + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
+                        print(new_lambda)
                         saved_lambdas[i].append(new_lambda)
                         tf_dict[mother.lambdas_tf[i]] = new_lambda
                 else:
