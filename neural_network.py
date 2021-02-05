@@ -69,7 +69,7 @@ class NeuralNetwork():
         
         tf.reset_default_graph()
         
-        self.beta = 0.05
+        self.beta = beta
         self.N_epochs = N_epochs
         self.N_lambda = N_lambda
         self.adam = True
@@ -691,14 +691,19 @@ class OptimizationProcedure():
                     
             mother.sess.run(self.first_order_optimizer, tf_dict)
             
-            if 0 < mother.beta <= 1:
-                lambdas = mother.sess.run(mother.lambdas, tf_dict)
-                lambdas = noninf_mean(lambdas, weights)
-                for i in range(len(saved_lambdas)):
-                    lambdas[i] = min([lambdas[i], 1])
-                    new_lambda = mother.beta * lambdas[i] \
-                        + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
-                    tf_dict[mother.lambdas_tf[i]] = new_lambda
+            if epoch % mother.N_lambda == 0:
+                if 0 < mother.beta <= 1:
+                    lambdas = mother.sess.run(mother.lambdas, tf_dict)
+                    lambdas = noninf_mean(lambdas, weights)
+                    for i in range(len(saved_lambdas)):
+                        lambdas[i] = min([lambdas[i], 1])
+                        new_lambda = mother.beta * lambdas[i] \
+                            + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
+                        saved_lambdas[i].append(new_lambda)
+                        tf_dict[mother.lambdas_tf[i]] = new_lambda
+                else:
+                    for i in range(len(saved_lambdas)):
+                        saved_lambdas[i].append(tf_dict[mother.lambdas_tf[i]])
             
         mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
                              mother.sess.run(mother.MSEu2, tf_dict), 

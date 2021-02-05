@@ -331,7 +331,7 @@ class ReconstructionNeuralNetwork():
         figLambda = plt.figure(figsize=(7.5, 5))
         color_plot = plt.rcParams['axes.prop_cycle'].by_key()['color']
         style_plot = ["-", "--"]
-        epochs = np.arange(len(self.neural_network.saved_lambdas[0])) * self.neural_network.nbEpoch
+        epochs = np.arange(len(self.neural_network.saved_lambdas[0])) * self.neural_network.N_lambda
         for i in range(len(self.neural_network.saved_lambdas)):
             plt.plot(epochs, self.neural_network.saved_lambdas[i], label='$\lambda_{i}$'.format(i=i+1), 
                      linestyle=style_plot[i%2],
