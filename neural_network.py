@@ -175,7 +175,7 @@ class NeuralNetwork():
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
         
         self.lambdas_init = [0.5] * len(self.losses)
-        self.lambdas_init[-1] = 0
+        # self.lambdas_init[-1] = 0
         
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
