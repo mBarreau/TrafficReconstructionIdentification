@@ -84,7 +84,7 @@ class NeuralNetwork():
         self.t_g = t_g
         self.u_v = u_v
         
-        self.N = len(self.x) # Number of agents
+        self.N = len(self.x)  # Number of agents
         self.max_speed = max_speed
 
         self.gamma_var = tf.Variable(1e-2, dtype=tf.float32, trainable=True)
@@ -101,13 +101,17 @@ class NeuralNetwork():
                 'density':init_density}
         
         # Theta neural network
-        self.weights['density'], self.biases['density'] = self.initialize_neural_network(layers['density'], init['density'][0], init['density'][1], act="tanh")
-        list_var_density = self.weights['density'] + self.biases['density']
+        self.weights['density'], self.biases['density'] = self.initialize_neural_network(layers['density'],
+                                                                                         init['density'][0],
+                                                                                         init['density'][1],
+                                                                                         act="tanh")
+        list_var_density = self.weights['density']# + self.biases['density']
         list_var_density = list_var_density + self.noise_rho_bar
         
         # Phi neural network
         self.weights['trajectories'] = []
         self.biases['trajectories'] = []
+        list_var_trajectories = []
         for i in range(self.N):
             weights_trajectories, biases_trajectories = self.initialize_neural_network(layers['trajectories'],
                                                                                        initWeights=init['trajectories'][0],
@@ -115,18 +119,21 @@ class NeuralNetwork():
                                                                                        act="tanh")
             self.weights['trajectories'].append(weights_trajectories)
             self.biases['trajectories'].append(biases_trajectories)
+            list_var_trajectories += weights_trajectories# + biases_trajectories
                         
         # V neural network
-        self.weights['speed'], self.biases['speed'] = self.initialize_neural_network(layers['speed'], init['speed'][0], init['speed'][1], act="tanh")
-        list_var_speed = self.weights['speed'] + self.biases['speed']
+        self.weights['speed'], self.biases['speed'] = self.initialize_neural_network(layers['speed'],
+                                                                                     initWeights=init['speed'][0],
+                                                                                     initBias=init['speed'][1],
+                                                                                     act="tanh")
+        list_var_speed = self.weights['speed']# + self.biases['speed']
         
         self.encoder1_weights = self.xavier_initializer([2, layers_density[1]], init=np.zeros((2, layers_density[1])))
         self.encoder1_biases = self.xavier_initializer([1, layers_density[1]], init=np.zeros((1, layers_density[1])))
         self.encoder2_weights = self.xavier_initializer([2, layers_density[1]], init=np.zeros((2, layers_density[1])))
         self.encoder2_biases = self.xavier_initializer([1, layers_density[1]], init=np.zeros((1, layers_density[1])))
         
-        list_var_density = list_var_density + [self.encoder1_weights, self.encoder1_biases, 
-                                               self.encoder2_weights, self.encoder2_biases]
+        # list_var_density = list_var_density + [self.encoder1_weights, self.encoder1_biases, self.encoder2_weights, self.encoder2_biases]
         
         # Start a TF session
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -151,36 +158,30 @@ class NeuralNetwork():
         self.g_pred = self.net_g(self.t_g_tf)
 
         # MSE part
-        self.MSEu1 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0) 
-                                              - self.net_u(tf.concat(self.t_tf, 0),
-                                                          tf.concat(self.x_tf, 0)))*tf.exp(0*tf.concat(self.u_tf, 0)))
-        self.MSEu2 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0)
-                                              - tf.concat(self.u_pred, 0)))
+        self.MSEu1 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0) - self.net_u(tf.concat(self.t_tf, 0),tf.concat(self.x_tf, 0)))*tf.exp(0*tf.concat(self.u_tf, 0)))
+        self.MSEu2 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0) - tf.concat(self.u_pred, 0)))
         self.MSEf = tf.reduce_mean(tf.square(self.f_pred))
         
-        self.MSEtrajectories = tf.reduce_mean(tf.square(tf.concat(self.x_tf, 0)
-                                                        - tf.concat(self.x_pred, 0))*tf.exp(0*tf.concat(self.u_tf, 0)))
+        self.MSEtrajectories = tf.reduce_mean(tf.square(tf.concat(self.x_tf, 0) - tf.concat(self.x_pred, 0))*tf.exp(0*tf.concat(self.u_tf, 0)))
         self.MSEg = tf.reduce_mean(tf.square(tf.concat(self.g_pred, 0)))
             
         self.MSEv1 = tf.reduce_mean(tf.square(tf.concat(self.v_tf, 0) - self.net_v(tf.concat(self.u_tf, 0))))
         self.MSEv2 = tf.reduce_mean(tf.square(tf.concat(self.v_tf, 0) - self.net_v(tf.concat(self.u_pred, 0))))
-        self.MSEv = tf.reduce_mean(tf.square(tf.nn.relu(self.net_ddf(self.u_v_tf))))
-        #    + tf.reduce_mean(tf.square(tf.nn.relu(self.net_v(self.u_v_tf) - max_speed)))
+        self.MSEv = tf.reduce_mean(tf.square(tf.nn.relu(self.net_ddf(self.u_v_tf)))) + tf.reduce_mean(tf.square(tf.nn.relu(self.net_v(self.u_v_tf) - max_speed)))
 
         # Lambda update procedure
-        self.losses = [
-            self.MSEu1, self.MSEf, tf.square(self.gamma_var)
-        ]
+        self.losses = [self.MSEu1, self.MSEu2, self.MSEf,   # density loss functions
+                       self.MSEtrajectories, self.MSEg,     # trajectory loss functions
+                       self.MSEv2, self.MSEv,               # speed loss functions
+                       tf.square(self.gamma_var)]           # viscosity parameter
  
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
-        
         self.lambdas_init = [0.5] * len(self.losses)
         # self.lambdas_init[-1] = 0
-        
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
         group_variables = [
-            list_var_density, self.gamma_var
+            list_var_density, list_var_trajectories, self.gamma_var
         ]
         
         loss_jacobian = []
@@ -306,8 +307,7 @@ class NeuralNetwork():
         else:
             return tf.Variable(init + tf.random.uniform([in_dim, out_dim], minval=init-xavier_bound, maxval=init+xavier_bound, dtype=tf.float32), dtype=tf.float32)
             #return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], mean=init, stddev=xavier_bound*np.sqrt(2/6), dtype=tf.float32), dtype=tf.float32)
-           
-    
+
     def neural_network(self, X, weights, biases, act=tf.nn.tanh, encoders=False):
         '''
         Compute the output of a given neural network in terms of tensor.
@@ -365,13 +365,13 @@ class NeuralNetwork():
 
         '''
         
-        # v_tanh = tf.square(self.neural_network(u, self.weights['speed'], 
-        #             self.biases['speed'], act=tf.nn.tanh))
-        # if self.max_speed is None:
-        #     return v_tanh*(1-u)
-        # else:
-        #     return (v_tanh*(1+u)/2 + self.max_speed)*(1-u)/2
-        return self.max_speed*(1-u)/2
+        v_tanh = tf.square(self.neural_network(u, self.weights['speed'],
+                    self.biases['speed'], act=tf.nn.tanh))
+        if self.max_speed is None:
+            return v_tanh*(1-u)
+        else:
+            return (v_tanh*(1+u)/2 + self.max_speed)*(1-u)/2
+        # return self.max_speed*(1-u)/2
     
     def net_ddf(self, u):
         '''
@@ -408,10 +408,10 @@ class NeuralNetwork():
             standardized characteristic speed.
 
         '''
-        # v = self.net_v(u)
-        # v_u = tf.gradients(v, u)[0]
-        # return v + (u+1)*v_u 
-        return - self.max_speed * u
+        v = self.net_v(u)
+        v_u = tf.gradients(v, u)[0]
+        return v + (u+1)*v_u
+        # return -self.max_speed * u
 
     def net_u(self, t, x):
         '''
@@ -601,8 +601,8 @@ class NeuralNetwork():
 
         '''
         u = np.float32(u)
-        # return self.sess.run(self.net_v(u))
-        return self.net_v(u)
+        return self.sess.run(self.net_v(u))
+        # return self.net_v(u)
     
     def predict_F(self, u):
         '''
@@ -668,8 +668,7 @@ class OptimizationProcedure():
 
         self.mother = mother
         self.epochs = epochs
-        
-        
+
     def train(self, tf_dict, step=1):
         mother = self.mother
         saved_lambdas = [[lambda_init] for lambda_init in mother.lambdas_init]

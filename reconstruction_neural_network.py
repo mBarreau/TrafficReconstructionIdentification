@@ -57,26 +57,28 @@ class ReconstructionNeuralNetwork():
         None.
 
         '''
-        
+
         self.Nxi = len(x) # Number of agents
         
         self.rho = rho
         self.v = v
         self.t = t
-        
+
+        # Density network
         num_hidden_layers = min(max(int(4*Tmax), 5), 15)
-        num_nodes_per_layer = int(5*L) 
-        layers_density = [2] # There are two inputs: space and time
+        num_nodes_per_layer = int(5*L)
+        layers_density = [2]  # There are two inputs: space and time
         for _ in range(num_hidden_layers):
             layers_density.append(num_nodes_per_layer)
-        layers_density.append(1)  
-        
-        num_hidden_layers = min(max(int(3*L), 4), 15)
+        layers_density.append(1)  # There is one output: density
+
+        # Trajectory network
+        num_hidden_layers = 4  # min(max(int(3*L), 4), 15)
         num_nodes_per_layer = 10
-        layers_trajectories = [1] # There are two inputs: space and time
-        # for _ in range(num_hidden_layers):
-        #     layers_trajectories.append(num_nodes_per_layer)
-        layers_trajectories.append(1)
+        layers_trajectories = [1]  # There is one input: time
+        for _ in range(num_hidden_layers):
+            layers_trajectories.append(num_nodes_per_layer)
+        layers_trajectories.append(1)  # There is one output: position
         
         t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train, v_max = self.createTrainingDataset(t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
         
@@ -85,7 +87,7 @@ class ReconstructionNeuralNetwork():
                                             layers_density=layers_density, 
                                             layers_trajectories=layers_trajectories, 
                                             layers_speed=(1, 5, 5, 5, 5, 1),
-                                            max_speed=v_max) # Creation of the neural network
+                                            max_speed=v_max)  # Creation of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
         '''
@@ -209,7 +211,6 @@ class ReconstructionNeuralNetwork():
         
         return self.neural_network.predict_speed(u)*(self.ub[0] - self.lb[0]) / (self.ub[1] - self.lb[1])
 
-    
     def predict_F(self, rho):
         '''
         Return the estimated characteristic speed at rho
@@ -251,8 +252,7 @@ class ReconstructionNeuralNetwork():
         output = self.neural_network.predict_trajectories(t)
         output = [(output[i]+1)*(self.ub[0] - self.lb[0])/2 + self.lb[0] for i in range(self.Nxi)]
         return output
-    
-    
+
     def plot(self, axisPlot, rho):
         '''
         
@@ -311,12 +311,11 @@ class ReconstructionNeuralNetwork():
         plt.legend()
         plt.tight_layout()
         # plt.title('Reconstruction')
-        figSpeed.savefig('speed.eps', bbox_inches='tight')
+        # figSpeed.savefig('speed.eps', bbox_inches='tight')
 
         figReconstruction = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(t, x)
-        plt.pcolor(X, Y, rho_prediction, vmin=0.0, vmax=1.0, shading='auto', 
-                   cmap='rainbow', rasterized=True)
+        plt.pcolor(X, Y, rho_prediction, vmin=0.0, vmax=1.0, shading='auto', cmap='rainbow', rasterized=True)
         for i in range(self.Nxi):
             plt.plot(t_pred[i], X_prediction[i], color="saddlebrown")
         plt.xlabel(r'Time [min]')
@@ -326,7 +325,7 @@ class ReconstructionNeuralNetwork():
         plt.colorbar()
         plt.tight_layout()
         # plt.title('Reconstruction')
-        figReconstruction.savefig('reconstruction.eps', bbox_inches='tight')
+        # figReconstruction.savefig('reconstruction.eps', bbox_inches='tight')
         
         figLambda = plt.figure(figsize=(7.5, 5))
         color_plot = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -344,7 +343,7 @@ class ReconstructionNeuralNetwork():
         plt.legend(loc='best')
         plt.tight_layout()
         # plt.title('Absolute error')
-        figLambda.savefig('lambda.eps', bbox_inches='tight') 
+        # figLambda.savefig('lambda.eps', bbox_inches='tight')
         
         figError = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(t, x)

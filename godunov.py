@@ -293,8 +293,7 @@ class SimuGodunov:
         
         fig = plt.figure(figsize=(7.5, 5))
         X, Y = np.meshgrid(self.t, self.x)
-        plt.pcolor(X, Y, z, shading='auto', vmin=0.0, vmax=1.0, cmap='rainbow',
-                   rasterized=True)
+        plt.pcolor(X, Y, z, vmin=0.0, vmax=1.0, shading='auto', cmap='rainbow', rasterized=True)
         plt.xlabel(r'Time [min]')
         plt.ylabel(r'Position [km]')
         plt.xlim(0, self.sim.Tmax)
@@ -302,7 +301,7 @@ class SimuGodunov:
         plt.colorbar()
         plt.tight_layout()
         self.pv.plot()
-        fig.savefig('density.eps', bbox_inches='tight')
+        # fig.savefig('density.eps', bbox_inches='tight')
         
     def getMeasurements(self, selectedPacket=-1, totalPacket=-1, noise=False):
         '''
