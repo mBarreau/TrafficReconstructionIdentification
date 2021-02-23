@@ -26,8 +26,6 @@ t_train, x_train, rho_train, v_train = sumo.getMeasurements()
 axisPlot = sumo.getAxisPlot()
 Vf = np.amax(v_train[14])
 
-print(rho_train)
-
 trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
                                                     L, Tmax, N_f=1000, N_g=100)
 trained_neural_network.train()
