@@ -36,7 +36,7 @@ xiT = np.array([0]*Npv)
 
 # Godunov simulation of the PDE
 simu_godunov = g.SimuGodunov(Vf, gamma, xiPos, xiT, L=L, Tmax=Tmax,
-                             zMin=0, zMax=1, Nx=700, greenshield=greenshield,
+                             zMin=0, zMax=1, Nx=500, greenshield=greenshield,
                              rhoBar=rhoBar, rhoSigma=rhoSigma)
 rho = simu_godunov.simulation()
 simu_godunov.plot()
@@ -46,12 +46,11 @@ axisPlot = simu_godunov.getAxisPlot()
 t_train, x_train, rho_train, v_train = simu_godunov.getMeasurements(selectedPacket=-1, totalPacket=-1, noise=noise)
 
 trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
-                                                    L, Tmax, v_max=Vf, N_f=1000, N_g=100)
+                                                    L, Tmax, v_max=Vf, N_f=1000, N_g=50, N_v=30)
 trained_neural_network.train()
 
 [_, _, figError] = trained_neural_network.plot(axisPlot, rho)
 simu_godunov.pv.plot()
 # figError.savefig('error.eps', bbox_inches='tight')
 
-# trained_neural_network.close()
 plt.show()

@@ -67,13 +67,15 @@ class ReconstructionNeuralNetwork():
         # Density network
         num_hidden_layers = min(max(int(4*Tmax), 5), 15)
         num_nodes_per_layer = int(5*L)
+        # num_hidden_layers = 10
+        # num_nodes_per_layer = 20
         layers_density = [2]  # There are two inputs: space and time
         for _ in range(num_hidden_layers):
             layers_density.append(num_nodes_per_layer)
         layers_density.append(1)  # There is one output: density
 
         # Trajectory network
-        num_hidden_layers = 4  # min(max(int(3*L), 4), 15)
+        num_hidden_layers = 5  # min(max(int(3*L), 4), 15)
         num_nodes_per_layer = 10
         layers_trajectories = [1]  # There is one input: time
         for _ in range(num_hidden_layers):
@@ -86,8 +88,9 @@ class ReconstructionNeuralNetwork():
                                             X_f_train, t_g_train, u_v_train,
                                             layers_density=layers_density, 
                                             layers_trajectories=layers_trajectories, 
-                                            layers_speed=(1, 5, 5, 5, 5, 1),
-                                            max_speed=v_max)  # Creation of the neural network
+                                            layers_speed=(1, 10, 10, 1),
+                                            max_speed=v_max, beta=0.05,
+                                            N_epochs=1000, N_lambda=10, adam=True)# Creation of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
         '''
@@ -329,12 +332,12 @@ class ReconstructionNeuralNetwork():
         
         figLambda = plt.figure(figsize=(7.5, 5))
         color_plot = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        style_plot = ["-", "--"]
+        style_plot = ["-", "--", "-."]
         epochs = np.arange(len(self.neural_network.saved_lambdas[0])) * self.neural_network.N_lambda
         for i in range(len(self.neural_network.saved_lambdas)):
             plt.plot(epochs, self.neural_network.saved_lambdas[i], label='$\lambda_{i}$'.format(i=i+1), 
-                     linestyle=style_plot[i%2],
-                     color=color_plot[int(i/2)])
+                     linestyle=style_plot[i%3],
+                     color=color_plot[int(i/3)])
         plt.xlabel(r'Epoch')
         plt.ylabel(r'Lambda values')
         plt.grid()
