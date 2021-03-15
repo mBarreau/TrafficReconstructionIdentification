@@ -177,7 +177,7 @@ class NeuralNetwork():
                        tf.square(self.gamma_var)]               # viscosity parameter
  
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
-        self.lambdas_init = [0.5] * len(self.losses)
+        self.lambdas_init = [0.99] * len(self.losses)
         # self.lambdas_init[-1] = 0
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
 
@@ -206,10 +206,10 @@ class NeuralNetwork():
         #                                             var_list=list_var_density+[self.gamma_var]))
         self.optimizer.append(OptimizationProcedure(self, self.loss, 
                                                     self.N_epochs, 
-                                                    {'maxiter': 5000, 
-                                                      'maxfun': 5000,
-                                                      'maxcor': 75,
-                                                      'maxls': 50,
+                                                    {'maxiter': 7000, 
+                                                      'maxfun': 7000,
+                                                      'maxcor': 50,
+                                                      'maxls': 20,
                                                       'ftol': 1.0 * np.finfo(float).eps}))
 
 
