@@ -206,8 +206,8 @@ class NeuralNetwork():
         #                                             var_list=list_var_density+[self.gamma_var]))
         self.optimizer.append(OptimizationProcedure(self, self.loss, 
                                                     self.N_epochs, 
-                                                    {'maxiter': 7000, 
-                                                      'maxfun': 7000,
+                                                    {'maxiter': 4000, 
+                                                      'maxfun': 4000,
                                                       'maxcor': 50,
                                                       'maxls': 20,
                                                       'ftol': 1.0 * np.finfo(float).eps}))

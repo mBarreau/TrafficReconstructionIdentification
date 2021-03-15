@@ -89,7 +89,7 @@ class ReconstructionNeuralNetwork():
                                             layers_density=layers_density, 
                                             layers_trajectories=layers_trajectories, 
                                             layers_speed=(1, 5, 5, 1),
-                                            max_speed=v_max, beta=0.1,
+                                            max_speed=v_max, beta=0.05,
                                             N_epochs=1000, N_lambda=10, adam=True) # Creation of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
