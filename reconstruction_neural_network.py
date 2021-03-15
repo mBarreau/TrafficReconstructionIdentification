@@ -76,7 +76,7 @@ class ReconstructionNeuralNetwork():
 
         # Trajectory network
         num_hidden_layers = 3  # min(max(int(3*L), 4), 15)
-        num_nodes_per_layer = 10
+        num_nodes_per_layer = 5
         layers_trajectories = [1]  # There is one input: time
         for _ in range(num_hidden_layers):
             layers_trajectories.append(num_nodes_per_layer)
@@ -90,7 +90,7 @@ class ReconstructionNeuralNetwork():
                                             layers_trajectories=layers_trajectories, 
                                             layers_speed=(1, 5, 5, 1),
                                             max_speed=v_max, beta=0.1,
-                                            N_epochs=0, N_lambda=10, adam=True)# Creation of the neural network
+                                            N_epochs=1000, N_lambda=10, adam=True) # Creation of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
         '''
