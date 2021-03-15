@@ -147,6 +147,7 @@ class NeuralNetwork():
         self.x_f_tf = tf.placeholder(tf.float32, shape=[None, self.x_f.shape[1]])
         self.t_f_tf = tf.placeholder(tf.float32, shape=[None, self.t_f.shape[1]])
         self.u_v_tf = tf.placeholder(tf.float32, shape=[None, self.u_v.shape[1]])
+
         
         self.u_pred = [self.net_u(self.t_tf[i], self.net_x_pv(self.t_tf[i], i)) - self.noise_rho_bar[i]
                        for i in range(self.N)] 
@@ -162,10 +163,13 @@ class NeuralNetwork():
         self.MSEu1 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0) - self.net_u(tf.concat(self.t_tf, 0),tf.concat(self.x_tf, 0)))*tf.exp(0*tf.concat(self.u_tf, 0)))
         self.MSEu2 = tf.reduce_mean(tf.square(tf.concat(self.u_tf, 0) - tf.concat(self.u_pred, 0)))
         self.MSEf = tf.reduce_mean(tf.square(self.f_pred))
-        
+
         self.MSEtrajectories = tf.reduce_mean(tf.square(tf.concat(self.x_tf, 0) - tf.concat(self.x_pred, 0))*tf.exp(0*tf.concat(self.u_tf, 0)))
         self.MSEg = tf.reduce_mean(tf.square(tf.concat(self.g_pred, 0)))
-            
+
+        self.ydot_pred = self.net_ydot(self.t_tf, self.u_tf)
+        self.MSE_ydot = tf.reduce_mean(tf.square(tf.concat(self.ydot_pred, 0)))
+
         self.MSEv1 = tf.reduce_mean(tf.square(tf.concat(self.v_tf, 0) - self.net_v(tf.concat(self.u_tf, 0))))
         self.MSEv2 = tf.reduce_mean(tf.square(tf.concat(self.v_tf, 0) - self.net_v(tf.concat(self.u_pred, 0))))
         self.MSEv = tf.reduce_mean(tf.square(tf.nn.relu(self.net_ddf(self.u_v_tf)))) #+ tf.reduce_mean(tf.square(tf.nn.relu(self.net_v(self.u_v_tf) - max_speed)))
@@ -174,6 +178,7 @@ class NeuralNetwork():
         self.losses = [self.MSEu1, self.MSEu2, self.MSEf,       # density loss functions
                        self.MSEv1, self.MSEv2, self.MSEv,       # speed loss functions
                        self.MSEtrajectories, self.MSEg,         # trajectory loss functions
+                       self.MSE_ydot,                           # 1st order physics cost
                        tf.square(self.gamma_var)]               # viscosity parameter
  
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
@@ -538,6 +543,16 @@ class NeuralNetwork():
             u = self.net_u(t[i], x_trajectories[i])
             g.append(x_t - self.net_v(u))
         return g
+
+    def net_ydot(self, t, u):
+        x = self.net_x(t)
+
+        rv = []
+        for t, x, u, n in zip(t, x, u, self.noise_rho_bar):
+            x_t = tf.gradients(x, t)[0]
+            rv.append(x_t - self.net_v(u - n))
+
+        return rv
 
     def loss_callback(self, MSEu1, MSEu2, MSEf, MSEtrajectories, MSEg, MSEv1, MSEv2, MSEv, total_loss, gamma):
         
