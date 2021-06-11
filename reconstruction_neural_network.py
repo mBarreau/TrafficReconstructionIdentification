@@ -6,22 +6,21 @@ Created on Mon Sep  7 10:15:37 2020
 """
 
 import numpy as np
-#import matplotlib
-#matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 from time import time
 from pyDOE import lhs
 from neural_network import NeuralNetwork
-        
+
 def hms(seconds):
     m, s = divmod(seconds, 60)
     h, m = divmod(m, 60)
     h, m, s = int(h), int(m), int(s)
     print('{:.0f}h {:.0f}m {:.0f}s'.format(h, m, s))
-    
+
 def amin(l):
     min_list = [np.amin(l[i]) for i in range(len(l))]
     return np.amin(min_list)
+
 
 def amax(l):
     min_list = [np.amax(l[i]) for i in range(len(l))]
@@ -29,7 +28,7 @@ def amax(l):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, t, x, rho, v, L, Tmax, v_max=None, N_f=1000, N_g=100, N_v=50):
+    def __init__(self, t, x, rho, v, L, Tmax, v_max=None, N_f=1000, N_g=100, N_v=50, sigmas=[], opt=0):
         '''
         Initialize a neural network for density reconstruction
 
@@ -90,7 +89,8 @@ class ReconstructionNeuralNetwork():
                                             layers_trajectories=layers_trajectories, 
                                             layers_speed=(1, 5, 5, 1),
                                             max_speed=v_max, beta=0.05,
-                                            N_epochs=1000, N_lambda=10, adam=True) # Creation of the neural network
+                                            N_epochs=3000, N_lambda=10, adam=True, 
+                                            sigmas=sigmas, opt=opt) # Creation of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       
         '''
@@ -157,6 +157,12 @@ class ReconstructionNeuralNetwork():
         np.random.shuffle(u_v)
         
         return (t, x, rho, v, X_f, t_g, u_v, v_max)
+    
+    def start(self):
+        self.neural_network.start()
+
+    def close(self):
+        self.neural_network.close()
 
     def train(self):
         '''
@@ -342,7 +348,6 @@ class ReconstructionNeuralNetwork():
         plt.ylabel(r'Lambda values')
         plt.grid()
         plt.xlim(0, max(epochs))
-        plt.ylim(0, 1)
         plt.legend(loc='best')
         plt.tight_layout()
         # plt.title('Absolute error')

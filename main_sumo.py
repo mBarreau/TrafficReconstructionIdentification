@@ -27,9 +27,11 @@ axisPlot = sumo.getAxisPlot()
 Vf = np.amax(v_train[14])
 
 trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
-                                                    L, Tmax, N_f=500, N_g=50)
+                                                    L, Tmax, N_f=500, N_g=50, opt=7)
+trained_neural_network.start()
 trained_neural_network.train()
 
 [_, _, figError] = trained_neural_network.plot(axisPlot, rho)
 sumo.plotProbeVehicles()
 figError.savefig('error.eps', bbox_inches='tight')
+trained_neural_network.close()

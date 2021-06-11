@@ -13,7 +13,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 logging.getLogger('tensorflow').setLevel(logging.FATAL)
 
 import tensorflow as tf
-
 import numpy as np
 
 class NeuralNetwork():
@@ -21,7 +20,7 @@ class NeuralNetwork():
     def __init__(self, t, x, u, v, X_f, t_g, u_v,
                  layers_density, layers_trajectories, layers_speed, max_speed=None,
                  init_density=[[], []], init_trajectories=[[], []], init_speed=[[], []],
-                 beta=0.05, N_epochs=1000, N_lambda=10, adam=False):
+                 beta=0.05, N_epochs=1000, N_lambda=10, adam=False, sigmas=[], opt=0):
      
         '''
         Initialize a neural network for regression purposes.
@@ -72,7 +71,8 @@ class NeuralNetwork():
         self.beta = beta
         self.N_epochs = N_epochs
         self.N_lambda = N_lambda
-        self.adam = True
+        self.adam = adam
+        self.sigmas = sigmas
 
         self.t = t
         self.x = x 
@@ -135,9 +135,6 @@ class NeuralNetwork():
         self.encoder2_biases = self.xavier_initializer([1, layers_density[1]], init=np.zeros((1, layers_density[1])))
         
         # list_var_density = list_var_density + [self.encoder1_weights, self.encoder1_biases, self.encoder2_weights, self.encoder2_biases]
-        
-        # Start a TF session
-        self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
 
         # PDE part     
         self.t_tf = [tf.placeholder(tf.float32, shape=[None, 1]) for _ in range(self.N)]
@@ -175,80 +172,53 @@ class NeuralNetwork():
                        self.MSEv1, self.MSEv2, self.MSEv,       # speed loss functions
                        self.MSEtrajectories, self.MSEg,         # trajectory loss functions
                        tf.square(self.gamma_var)]               # viscosity parameter
+        self.constraints = [0, 0, 1, 0, 0, 1, 0, 1, 0]
  
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
-        self.lambdas_init = [0.99] * len(self.losses)
-        # self.lambdas_init[-1] = 0
+        self.lambdas_init = [0] * len(self.losses)
+        for i in range(len(self.losses)):
+            if self.constraints[i] == 0:
+                if len(sigmas) != len(self.losses):
+                    # By default, the weighting terms are set to 1
+                    self.lambdas_init[i] = 1
+                else:
+                    self.lambdas_init[i] = sigmas[i]
+            else:
+                self.lambdas_init[i] = 0
+                    
         self.saved_lambdas = [[lambda_init] for lambda_init in self.lambdas_init]
-
-        self.group_variables = [
-            list_var_density, list_var_trajectories, list_var_speed, self.gamma_var
-        ]
 
         self.loss = np.dot(np.array(self.lambdas_tf), np.array(self.losses))
         
-        self.optimizer = []
-        # self.optimizer.append(OptimizationProcedure(self, self.MSEtrajectories + self.MSEv, 
-        #                                             0, 
-        #                                             {'maxiter': 1000, 
-        #                                              'maxfun': 1000,
-        #                                              'maxcor': 50,
-        #                                              'maxls': 20,
-        #                                              'ftol': 1.0 * np.finfo(float).eps},
-        #                                              var_list=list_var_trajectories+list_var_speed))
-        # self.optimizer.append(OptimizationProcedure(self, self.loss, 
-        #                                             self.N_epochs, 
-        #                                             {'maxiter': 500, 
-        #                                              'maxfun': 500,
-        #                                              'maxcor': 50,
-        #                                              'maxls': 20,
-        #                                              'ftol': 10.0 * np.finfo(float).eps}, 
-        #                                             var_list=list_var_density+[self.gamma_var]))
+        variables = list_var_density + list_var_speed + list_var_trajectories
+        self.dL = []
+        for g in tf.gradients(self.loss, variables):
+            if g is not None:
+                self.dL.append(g)
+        
+        self.losses_values = []
+        self.loss_values = []
+        
+        self.optimizer = []            
         self.optimizer.append(OptimizationProcedure(self, self.loss, 
-                                                    self.N_epochs, 
-                                                    {'maxiter': 4000, 
-                                                      'maxfun': 4000,
-                                                      'maxcor': 50,
-                                                      'maxls': 20,
-                                                      'ftol': 1.0 * np.finfo(float).eps}))
-
-
+                                                        self.N_epochs, 
+                                                        {'maxiter': self.N_epochs, 
+                                                         'maxfun': self.N_epochs,
+                                                         'maxcor': 75,
+                                                         'maxls': 50,
+                                                         'ftol': 1.0 * np.finfo(float).eps},
+                                                        opt=opt))
+        
+    def start(self):
+         # Start a TF session
+        self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
         # Initialize the TF session
         init = tf.global_variables_initializer() 
-        self.sess.run(init)
+        self.sess.run(init)      
         
-    def update_lambda(self, group_variables=None):
-        
-        if group_variables is None:
-            group_variables = self.group_variables
-            
-        loss_jacobian = []
-        weight_jacobian = []
-        for j in range(len(self.group_variables)):
-            grad_loss_variable = []
-            weight_loss_variable = []
-            for i in range(len(self.losses)):
-                grad_loss = tf.gradients(self.losses[i], self.group_variables[j])
-                stacked_grad = []
-                for grad in grad_loss:
-                    if grad is not None:
-                        stacked_grad.append(tf.reshape(grad, (-1, 1)))
-                if len(stacked_grad) > 0:
-                    stacked_grad = tf.concat(stacked_grad, 0)
-                else:
-                    stacked_grad = tf.constant(0.)
-                grad_loss_variable.append(tf.reduce_mean(tf.abs(stacked_grad)))
-                weight_loss_variable.append(tf.size(stacked_grad, out_type=tf.dtypes.float32))
-            loss_jacobian.append(grad_loss_variable)
-            weight_jacobian.append(weight_loss_variable)
-            
-        loss_jacobian = tf.convert_to_tensor(loss_jacobian)
-        self.weight_jacobian = tf.convert_to_tensor(weight_jacobian)
-
-        old_lambdas = tf.convert_to_tensor(self.lambdas_tf)
-        nz_mean = nonzero_mean(loss_jacobian * old_lambdas, axis=1)
-        nz_mean = tf.tile(nz_mean, [1, len(self.losses)])
-        self.lambdas = tf.divide(nz_mean, loss_jacobian)
+    def close(self):
+        self.sess.close()
+        tf.reset_default_graph()
         
     def initialize_neural_network(self, layers, initWeights=[], initBias=[], act="tanh"):
         '''
@@ -666,124 +636,132 @@ class NeuralNetwork():
     
 class OptimizationProcedure():
     
-    def __init__(self, mother, loss, epochs, options, var_list=None):
+    def __init__(self, mother, loss, N_epochs, options, var_list=None, opt=0):
         self.loss = loss
+        self.opt = opt
+        
+        if self.opt >= 2: # We use ADAM
+                self.optimizer_gd = tf.train.AdamOptimizer().minimize(loss, var_list=var_list)
+        
+        if self.opt == 0 or self.opt == 1 or self.opt >= 6:
+            # Define BFGS
+            self.optimizer_BFGS = tf.contrib.opt.ScipyOptimizerInterface(loss, var_list=var_list,
+                                                                             method='L-BFGS-B', 
+                                                                             options=options)
         self.mother = mother
-        self.epochs = epochs
-        self.group_variables = var_list
+        self.N_epochs = N_epochs
         
-        # Define optimizer with learning rate schedule     
-        if mother.adam:
-            self.first_order_optimizer = tf.train.AdamOptimizer().minimize(loss, var_list=var_list)
-        else:
-            self.global_step = tf.Variable(0, trainable=False)
-            starter_learning_rate = 1e-3
-            self.learning_rate = tf.train.exponential_decay(starter_learning_rate, self.global_step,
-                                                        5*epochs, 0.9, staircase=False)   
-            self.first_order_optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(loss, 
-                                                                                  var_list=var_list, 
-                                                                                  global_step=self.global_step)  
-        
-        # Define BFGS
-        self.optimizer_BFGS = tf.contrib.opt.ScipyOptimizerInterface(loss, var_list=var_list,
-                                                                         method='L-BFGS-B', 
-                                                                         options=options)
-
     def train(self, tf_dict, step=1):
+        
         mother = self.mother
+        # N_f = len(tf_dict[mother.t_f_tf])
+        saved_lambdas = [[tf_dict[mother.lambdas_tf[i]]] for i in range(len(mother.lambdas_tf))]
         
-        mother.update_lambda(self.group_variables)
-        saved_lambdas = [[lambda_init] for lambda_init in mother.lambdas_init]
-        
-        if self.epochs > 0:
-            if mother.adam:
-                print('------> %.0f. ADAM' % step)
-            else:
-                print('------> %.0f. Standard Gradient Descent' % step)
-            weights = mother.sess.run(mother.weight_jacobian)
-            for epoch in range(self.epochs):
-                mother.epoch = epoch + 1
+        if self.opt >= 2: # Use of first order scheme
                 
-                if epoch % mother.N_lambda == 0:
-                    print('Epoch: %.0f | MSEv1: %.5e | MSEv: %.5e || MSEu1: %.5e | MSEf: %.5e || Gamma: %.5e || \
-                          Total: %.5e' %
-                      (mother.epoch, mother.sess.run(mother.MSEv1, tf_dict), 
-                       mother.sess.run(mother.MSEv, tf_dict), 
-                       mother.sess.run(mother.MSEu1, tf_dict), 
-                       mother.sess.run(mother.MSEf, tf_dict), 
-                       mother.sess.run(mother.gamma_var)**2, 
-                       mother.sess.run(self.loss, tf_dict)))
-                        
-                mother.sess.run(self.first_order_optimizer, tf_dict)
-                
-                if epoch % mother.N_lambda == 0:
-                    if 0 < mother.beta <= 1:
-                        lambdas = mother.sess.run(mother.lambdas, tf_dict)
-                        lambdas = noninf_mean(lambdas, weights)
-                        for i in range(len(saved_lambdas)):
-                            lambdas[i] = min([lambdas[i], 1])
-                            new_lambda = mother.beta * lambdas[i] \
-                                + (1 - mother.beta) * tf_dict[mother.lambdas_tf[i]]
-                            print(new_lambda)
-                            saved_lambdas[i].append(new_lambda)
-                            tf_dict[mother.lambdas_tf[i]] = new_lambda
-                    else:
-                        for i in range(len(saved_lambdas)):
-                            saved_lambdas[i].append(tf_dict[mother.lambdas_tf[i]])
-                
-            mother.loss_callback(mother.sess.run(mother.MSEu1, tf_dict), 
-                                 mother.sess.run(mother.MSEu2, tf_dict), 
-                                 mother.sess.run(mother.MSEf, tf_dict), 
-                                 mother.sess.run(mother.MSEtrajectories, tf_dict), 
-                                 mother.sess.run(mother.MSEg, tf_dict), 
-                                 mother.sess.run(mother.MSEv1, tf_dict), 
-                                 mother.sess.run(mother.MSEv2, tf_dict), 
-                                 mother.sess.run(mother.MSEv, tf_dict), 
-                                 mother.sess.run(self.loss, tf_dict), 
-                                 mother.sess.run(mother.gamma_var))
-            
-        print('------> %.0f. BFGS' % step)
-        # for i, lambda_init in enumerate(mother.lambdas_init):
-        #     tf_dict[mother.lambdas_tf[i]] = lambda_init
-            
-        self.optimizer_BFGS.minimize(mother.sess,
-                                feed_dict=tf_dict,
-                                fetches=[mother.MSEu1, mother.MSEu2, mother.MSEf, mother.MSEtrajectories, 
-                                         mother.MSEg, mother.MSEv1, mother.MSEv2, mother.MSEv,
-                                         self.loss, mother.gamma_var],
-                                loss_callback=mother.loss_callback)
-        return saved_lambdas
-    
-def number_elements(tensor_list, dtype=tf.dtypes.float32):
-    total_number = 0
-    for tensor in tensor_list:
-        total_number = total_number + tf.size(tensor, out_type=dtype)
-    return total_number
+            L = mother.sess.run(mother.losses, tf_dict)
 
-def noninf_mean(arr, weight=None):
-    shape = arr.shape
-    
-    if weight is None:
-        weight = np.ones(shape)
-        
-    result = []
-    for j in range(shape[1]):
-        column = 0
-        total_weight = 0
-        for i in range(shape[0]):
-            value = arr[i, j]
-            w = weight[i,j]
-            if np.isfinite(value):
-                column = column + w * value
-                total_weight = total_weight + w
-        if total_weight > 0:
-            column = column / total_weight
-        else:
-            column = 0
-        result.append(column)
-    return result
+            for epoch in range(self.N_epochs):
+                
+                mother.epoch = epoch + 1
+                #mother.loss_callback(L, mother.sess.run(self.loss, tf_dict))
+                
+                mother.sess.run(self.optimizer_gd, tf_dict)
+                
+                if self.opt == 4 or self.opt == 6: # ADAMBU or pretraining BFGS: Update of lambda
+                    if epoch % mother.N_lambda == 0:
+                        lambdas = mother.sess.run(mother.lambdas, tf_dict)
+                        for i in range(len(saved_lambdas)):
+                            if len(mother.sigmas) > 0:
+                                tf_dict[mother.lambdas_tf[i]] = min(lambdas[i], mother.sigmas[i])
+                            else:
+                                tf_dict[mother.lambdas_tf[i]] = lambdas[i]
+                        # t_f, x_f = latin_hypercube_sampling(N_f)
+                        # tf_dict[mother.t_f_tf] = t_f
+                        # tf_dict[mother.x_f_tf] = x_f
+                elif self.opt == 3 or self.opt == 7: # Primal-dual
+                    if epoch % mother.N_lambda == 0:
+                        for i in range(len(saved_lambdas)):
+                            if mother.constraints[i] == 0:
+                                continue
+                            if len(mother.sigmas) > 0:
+                                lr = 1e-2 * (2 * mother.sigmas[i] - tf_dict[mother.lambdas_tf[i]]) / mother.sigmas[i]
+                                Li = mother.sess.run(mother.losses[i], tf_dict)
+                                new_lambda = tf_dict[mother.lambdas_tf[i]] + lr * Li
+                                tf_dict[mother.lambdas_tf[i]] = min(new_lambda, mother.sigmas[i])
+                            else:
+                                lr = 1e-3 * 1 / (1 + epoch / self.N_epochs)
+                                Li = mother.sess.run(mother.losses[i], tf_dict)
+                                new_lambda = tf_dict[mother.lambdas_tf[i]] + lr * Li
+                                tf_dict[mother.lambdas_tf[i]] = new_lambda
+                elif self.opt == 2 or self.opt == 9: # ADMM
+                    if epoch % mother.N_lambda == 0:
+                        for i in range(len(saved_lambdas)):
+                            if mother.constraints[i] == 0:
+                                continue
+                            if len(mother.sigmas) > 0:
+                                tf_dict[mother.c_tf] = 1e-2 * (2 * mother.sigmas[i] - tf_dict[mother.lambdas_tf[i]]) / mother.sigmas[i]
+                                Li = mother.sess.run(mother.losses[i], tf_dict)
+                                new_lambda = tf_dict[mother.lambdas_tf[i]] + tf_dict[mother.c_tf] * Li
+                                tf_dict[mother.lambdas_tf[i]] = min(new_lambda, mother.sigmas[i])
+                            else:
+                                Li = mother.sess.run(mother.losses[i], tf_dict)
+                                new_lambda = tf_dict[mother.lambdas_tf[i]] + tf_dict[mother.c_tf] * Li
+                                tf_dict[mother.lambdas_tf[i]] = new_lambda
+                                
+                for i in range(len(saved_lambdas)):
+                    saved_lambdas[i].append(tf_dict[mother.lambdas_tf[i]])
+                        
+                Lnew = mother.sess.run(mother.losses, tf_dict)
+                coef_L = 0.
+                for i in range(len(Lnew)):
+                    coef_L = max(coef_L, abs(L[i] - Lnew[i]) / max(L[i], Lnew[i], 1))
+                    
+                dL = mother.sess.run(mother.dL, tf_dict)
+                max_dL = 0.
+                for i in range(len(dL)):
+                    max_dL = max(max_dL, np.amax(abs(dL[i])))
+                    
+                if np.max(Lnew) <= 1e-6:
+                    print('Low value of the cost.')
+                    break
+                
+                if coef_L <= 1e-8:
+                    print('No evolution of the cost.')
+                    break
+                
+                if max_dL <= 1e-8:
+                    print('Gradient is almost zero.')
+                    break
+                
+                L = Lnew
+                
+        if self.opt == 0 or self.opt >= 6:
+            self.optimizer_BFGS.minimize(mother.sess,
+                                    feed_dict=tf_dict,
+                                    fetches=[mother.losses, self.loss])
             
-def nonzero_mean(tensor, axis=None):
-    sum_tensor = tf.reduce_sum(tensor, axis=axis, keepdims=True)
-    nonzero_values = tf.math.count_nonzero(tensor, axis=axis, dtype=tf.dtypes.float32, keepdims=True)
-    return tf.divide(sum_tensor, nonzero_values)
+        if self.opt == 1: # Real penaly method
+            for i in range(self.N_epochs):
+                self.optimizer_BFGS.minimize(mother.sess,
+                                        feed_dict=tf_dict,
+                                        fetches=[mother.losses, self.loss])
+                
+                max_difference_lambdas = 0
+                for i in range(len(saved_lambdas)):
+                    if mother.constraints[i] == 0:
+                        saved_lambdas[i].append(1.)
+                        continue
+                    old_lambdai = tf_dict[mother.lambdas_tf[i]]
+                    Li = mother.sess.run(mother.losses[i], tf_dict)
+                    tf_dict[mother.lambdas_tf[i]] = old_lambdai + tf_dict[mother.c_tf] * Li
+                    saved_lambdas[i].append(tf_dict[mother.lambdas_tf[i]])
+                    relative_diff = abs(old_lambdai - tf_dict[mother.lambdas_tf[i]]) / max(old_lambdai, tf_dict[mother.lambdas_tf[i]], 1)
+                    max_difference_lambdas = max(max_difference_lambdas, relative_diff)
+                    
+                tf_dict[mother.c_tf] = 1.1 * tf_dict[mother.c_tf]
+                    
+                if max_difference_lambdas <= 1e-3:
+                    break
+            
+        return saved_lambdas
