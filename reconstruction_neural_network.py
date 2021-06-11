@@ -28,7 +28,7 @@ def amax(l):
 
 class ReconstructionNeuralNetwork():
     
-    def __init__(self, t, x, rho, v, L, Tmax, v_max=None, N_f=1000, N_g=100, N_v=50, sigmas=[], opt=0):
+    def __init__(self, t, x, rho, v, L, Tmax, v_max=None, N_f=1000, N_g=100, N_v=50, opt=0):
         '''
         Initialize a neural network for density reconstruction
 
@@ -80,6 +80,8 @@ class ReconstructionNeuralNetwork():
         for _ in range(num_hidden_layers):
             layers_trajectories.append(num_nodes_per_layer)
         layers_trajectories.append(1)  # There is one output: position
+        
+        sigmas = [1, 0.2, 0.5, 1, 0.2, 0.5, 1, 1, 0.1]
         
         t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train, v_max = self.createTrainingDataset(t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
         
