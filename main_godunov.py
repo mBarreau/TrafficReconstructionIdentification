@@ -46,7 +46,7 @@ axisPlot = simu_godunov.getAxisPlot()
 t_train, x_train, rho_train, v_train = simu_godunov.getMeasurements(selectedPacket=-1, totalPacket=-1, noise=noise)
 
 trained_neural_network = rn.ReconstructionNeuralNetwork(t_train, x_train, rho_train, v_train,
-                                                    L, Tmax, v_max=Vf, N_f=1000, N_g=50, N_v=30, opt=7)
+                                                    L, Tmax, v_max=Vf, N_f=1000, N_g=50, N_v=30, opt=9)
 trained_neural_network.start() 
 trained_neural_network.train()
 

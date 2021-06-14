@@ -81,7 +81,7 @@ class ReconstructionNeuralNetwork():
             layers_trajectories.append(num_nodes_per_layer)
         layers_trajectories.append(1)  # There is one output: position
         
-        sigmas = [1, 0.2, 0.5, 1, 0.2, 0.5, 1, 1, 0.1]
+        sigmas = [1, 0.2, 0.5, 1, 0.5, 0, 1, 0.5, 0]
         
         t_train, x_train, u_train, v_train, X_f_train, t_g_train, u_v_train, v_max = self.createTrainingDataset(t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v) # Creation of standardized training dataset
         
@@ -91,7 +91,7 @@ class ReconstructionNeuralNetwork():
                                             layers_trajectories=layers_trajectories, 
                                             layers_speed=(1, 5, 5, 1),
                                             max_speed=v_max, beta=0.05,
-                                            N_epochs=3000, N_lambda=10, adam=True, 
+                                            N_epochs=3000, N_lambda=10, 
                                             sigmas=sigmas, opt=opt) # Creation of the neural network
             
     def createTrainingDataset(self, t, x, rho, v, v_max, L, Tmax, N_f, N_g, N_v):       

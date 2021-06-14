@@ -20,7 +20,7 @@ class NeuralNetwork():
     def __init__(self, t, x, u, v, X_f, t_g, u_v,
                  layers_density, layers_trajectories, layers_speed, max_speed=None,
                  init_density=[[], []], init_trajectories=[[], []], init_speed=[[], []],
-                 beta=0.05, N_epochs=1000, N_lambda=10, adam=False, sigmas=[], opt=0):
+                 beta=0.05, N_epochs=1000, N_lambda=10, sigmas=[], opt=0):
      
         '''
         Initialize a neural network for regression purposes.
@@ -71,7 +71,7 @@ class NeuralNetwork():
         self.beta = beta
         self.N_epochs = N_epochs
         self.N_lambda = N_lambda
-        self.adam = adam
+        self.opt = opt
         self.sigmas = sigmas
 
         self.t = t
@@ -172,7 +172,7 @@ class NeuralNetwork():
                        self.MSEv1, self.MSEv2, self.MSEv,       # speed loss functions
                        self.MSEtrajectories, self.MSEg,         # trajectory loss functions
                        tf.square(self.gamma_var)]               # viscosity parameter
-        self.constraints = [0, 0, 1, 0, 0, 1, 0, 1, 0]
+        self.constraints = [0, 1, 1, 0, 1, 1, 0, 1, 1]
  
         self.lambdas_tf = [tf.placeholder(tf.float32, shape=()) for _ in self.losses]
         self.lambdas_init = [0] * len(self.losses)
@@ -190,6 +190,11 @@ class NeuralNetwork():
 
         self.loss = np.dot(np.array(self.lambdas_tf), np.array(self.losses))
         
+        if opt == 1 or opt == 2 or opt == 9: # We use the penalty method
+            self.c_tf = tf.placeholder(tf.float32, shape=()) 
+            for i in range(len(self.losses)):
+                self.loss = self.loss + self.c_tf * self.constraints[i] * tf.square(self.losses[i]) / 2
+        
         variables = list_var_density + list_var_speed + list_var_trajectories
         self.dL = []
         for g in tf.gradients(self.loss, variables):
@@ -199,11 +204,19 @@ class NeuralNetwork():
         self.losses_values = []
         self.loss_values = []
         
-        self.optimizer = []            
+        self.optimizer = []   
+        self.optimizer.append(OptimizationProcedure(self, self.MSEv1 + self.MSEtrajectories, 
+                                                        0, 
+                                                        {'maxiter': 40000, 
+                                                         'maxfun': 40000,
+                                                         'maxcor': 25,
+                                                         'maxls': 20,
+                                                         'ftol': 5.0 * np.finfo(float).eps},
+                                                        opt=0))         
         self.optimizer.append(OptimizationProcedure(self, self.loss, 
                                                         self.N_epochs, 
-                                                        {'maxiter': self.N_epochs, 
-                                                         'maxfun': self.N_epochs,
+                                                        {'maxiter': 40000, 
+                                                         'maxfun': 40000,
                                                          'maxcor': 75,
                                                          'maxls': 50,
                                                          'ftol': 1.0 * np.finfo(float).eps},
@@ -548,6 +561,9 @@ class NeuralNetwork():
         tf_dict[self.x_f_tf] = self.x_f
         tf_dict[self.u_v_tf] = self.u_v
         
+        if self.opt == 1 or self.opt == 2 or self.opt == 9:
+            tf_dict[self.c_tf] = 1e-2
+        
         for i in range(len(self.optimizer)):
             for j in range(len(self.lambdas_tf)):
                 tf_dict[self.lambdas_tf[j]] = self.lambdas_init[j]
@@ -684,30 +700,31 @@ class OptimizationProcedure():
                         for i in range(len(saved_lambdas)):
                             if mother.constraints[i] == 0:
                                 continue
-                            if len(mother.sigmas) > 0:
-                                lr = 1e-2 * (2 * mother.sigmas[i] - tf_dict[mother.lambdas_tf[i]]) / mother.sigmas[i]
-                                Li = mother.sess.run(mother.losses[i], tf_dict)
-                                new_lambda = tf_dict[mother.lambdas_tf[i]] + lr * Li
-                                tf_dict[mother.lambdas_tf[i]] = min(new_lambda, mother.sigmas[i])
-                            else:
+                            if mother.sigmas[i] <= 0: # This is a hard constraint
                                 lr = 1e-3 * 1 / (1 + epoch / self.N_epochs)
                                 Li = mother.sess.run(mother.losses[i], tf_dict)
                                 new_lambda = tf_dict[mother.lambdas_tf[i]] + lr * Li
                                 tf_dict[mother.lambdas_tf[i]] = new_lambda
+                            else: # This is a soft constraint
+                                lr = 1e-2 * (2 * mother.sigmas[i] - tf_dict[mother.lambdas_tf[i]]) / mother.sigmas[i]
+                                Li = mother.sess.run(mother.losses[i], tf_dict)
+                                new_lambda = tf_dict[mother.lambdas_tf[i]] + lr * Li
+                                tf_dict[mother.lambdas_tf[i]] = min(new_lambda, mother.sigmas[i])
+                                
                 elif self.opt == 2 or self.opt == 9: # ADMM
                     if epoch % mother.N_lambda == 0:
                         for i in range(len(saved_lambdas)):
                             if mother.constraints[i] == 0:
                                 continue
-                            if len(mother.sigmas) > 0:
-                                tf_dict[mother.c_tf] = 1e-2 * (2 * mother.sigmas[i] - tf_dict[mother.lambdas_tf[i]]) / mother.sigmas[i]
-                                Li = mother.sess.run(mother.losses[i], tf_dict)
-                                new_lambda = tf_dict[mother.lambdas_tf[i]] + tf_dict[mother.c_tf] * Li
-                                tf_dict[mother.lambdas_tf[i]] = min(new_lambda, mother.sigmas[i])
-                            else:
+                            if mother.sigmas[i] <= 0: # This is a hard constraint
                                 Li = mother.sess.run(mother.losses[i], tf_dict)
                                 new_lambda = tf_dict[mother.lambdas_tf[i]] + tf_dict[mother.c_tf] * Li
                                 tf_dict[mother.lambdas_tf[i]] = new_lambda
+                            else: # this is a soft constraint
+                                tf_dict[mother.c_tf] = 1e-2 * (2 * mother.sigmas[i] - tf_dict[mother.lambdas_tf[i]]) / mother.sigmas[i]
+                                Li = mother.sess.run(mother.losses[i], tf_dict)
+                                new_lambda = tf_dict[mother.lambdas_tf[i]] + tf_dict[mother.c_tf] * Li
+                                tf_dict[mother.lambdas_tf[i]] = min(new_lambda, mother.sigmas[i])                                
                                 
                 for i in range(len(saved_lambdas)):
                     saved_lambdas[i].append(tf_dict[mother.lambdas_tf[i]])
