@@ -8,6 +8,7 @@ import seaborn
 import pandas
 import scipy.stats as stats
 
+plt.rc('text', usetex=True)
 
 def parse_args():
     ap = ArgumentParser()
@@ -46,24 +47,22 @@ def main():
     sumo = get_data(args.sumo_data)
     sumo_np = get_data(args.sumo_np_data)
 
-#     colnames = [
-#         'Greenshields', 'Greenshields (NP)', 'ND', 'ND (NP)', 'SUMO',
-#         'SUMO (NP)']
+    colnames = ['Error', 'Time', 'Case', 'Pre-training']
 
-    colnames = ['Error', 'Time', 'Case', 'Pretraining']
-
-    data = [ (error, time, 'Greenshields', 'Yes') for error, time in
-                zip(greenshields['rmse'], greenshields['time'])
-            ] + [ (error, time, 'Greenshields', 'No') for error, time in
-                zip(greenshields_np['rmse'], greenshields_np['time'])
-            ] + [ (error, time, 'Newell-Daganzo', 'Yes') for error, time in
-                zip(newelldaganzo['rmse'], newelldaganzo['time'])
-            ] + [ (error, time, 'Newell-Daganzo', 'No') for error, time in
-                zip(newelldaganzo_np['rmse'], newelldaganzo_np['time'])
-            ] + [ (error, time, 'SUMO', 'Yes') for error, time in
-                zip(sumo['rmse'], sumo['time'])
-            ] + [ (error, time, 'SUMO', 'No') for error, time in
-                zip(sumo_np['rmse'], sumo_np['time']) ]
+    data = [
+        (error, time, 'Greenshields', 'Yes')
+        for error, time in zip(greenshields['rmse'], greenshields['time'])
+    ] + [
+        (error, time, 'Greenshields', 'No') for error, time in zip(
+            greenshields_np['rmse'], greenshields_np['time'])
+    ] + [(error, time, 'Newell-Daganzo', 'Yes')
+         for error, time in zip(newelldaganzo['rmse'], newelldaganzo['time'])
+         ] + [(error, time, 'Newell-Daganzo', 'No') for error, time in zip(
+             newelldaganzo_np['rmse'], newelldaganzo_np['time'])] + [
+                 (error, time, 'SUMO', 'Yes')
+                 for error, time in zip(sumo['rmse'], sumo['time'])
+             ] + [(error, time, 'SUMO', 'No')
+                  for error, time in zip(sumo_np['rmse'], sumo_np['time'])]
 
     alldata = pandas.DataFrame(data, columns=colnames)
 
@@ -71,19 +70,40 @@ def main():
     score = np.abs(stats.zscore(alldata['Time']))
     alldata = alldata[(score < 4)]
 
+    plt.rc('font', size=8)
     fig, ax = plt.subplots(2, 1, sharex=True)
-    seaborn.boxplot(data=alldata, x='Case', y='Time', hue='Pretraining',
-            ax=ax[0])
-    seaborn.boxplot(data=alldata, x='Case', y='Error', hue='Pretraining',
-            ax=ax[1])
 
-    ax[0].set_ylabel('Time [sec]')
-    ax[1].set_ylabel('Generalization Error')
+    seaborn.boxplot(data=alldata,
+                    x='Case',
+                    y='Time',
+                    hue='Pre-training',
+                    ax=ax[0],
+                    width=0.6,
+                    fliersize=3)
+
+    seaborn.boxplot(data=alldata,
+                    x='Case',
+                    y='Error',
+                    hue='Pre-training',
+                    ax=ax[1],
+                    width=0.6,
+                    fliersize=3)
+
     ax[0].set_yscale('log')
-    ax[1].set_yscale('log')
-    ax[1].get_legend().remove()
+    ax[0].set_ylabel(r'Time [sec]')
     ax[0].set_xlabel('')
+    ax[0].legend(title=r'Pre-training', loc=(0.58, 0.7))
+    ax[0].grid(axis='y')
+
+    ax[1].set_yscale('log')
+    ax[1].set_ylabel(r'Generalization Error')
     ax[1].set_xlabel('')
+    ax[1].get_legend().remove()
+    ax[1].grid(axis='y')
+
+    fig.set_tight_layout(True)
+
+    fig.savefig('cdc_stats.eps', bbox_inches='tight')
     plt.show()
 
 
